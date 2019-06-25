@@ -11,7 +11,6 @@ If a new cluster is needed program will:
 
 - Provision new cluster with `openshift-install` tool
 - Deploy resources in its namespace to new cluster
-  Maybe one day)
 - Point DNS to new cluster
 - Post new credentials to Slack
 
