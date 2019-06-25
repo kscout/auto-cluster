@@ -108,6 +108,10 @@ if ! KUBECONFIG="$to_kubeconfig" oc apply -n "$ns" -f "$from_f"; then
     die "Failed to import resources to $to cluster"
 fi
 
+while read -r dc_name; do
+    KUBECONFIG="$to_kubeconfig" oc rollout latest "dc/$dc_name"
+done <<< $(KUBECONFIG="$to_kubeconfig" oc get dc -o=custom-columns=Name:.metadata.name | tail -n +2)
+
 if ! rm "$from_f"; then
     die "Failed to delete export file $from_f"
 fi
