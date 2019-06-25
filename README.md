@@ -57,7 +57,7 @@ and `AWS_SECRET_ACCESS_KEY`.
 A configuration file is required. Modify the following configuration file with
 your information. Save as a `.toml` file and place in the repository root.
 
-```
+```toml
 [Cluster]
 # Prefix to add to name when searching for / creating new clusters
 NamePrefix = "NAME PREFIX"
