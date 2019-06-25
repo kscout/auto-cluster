@@ -7,11 +7,13 @@ its 48 hour lifespan.
 - [Run](#run)
 
 # Overview
-The kscout.io is currently hosted on temporary OpenShift 4.1 development 
-clusters. These clusters are automatically deleted after 48 hours. As a result
-a new cluster must be created every 2 days. New resources must be deployed to
-this cluster and the Cloudflare DNS zone for kscout.io must be updated to point
-to the new cluster.
+The [kscout.io](https://kscout.io) site is currently hosted on temporary 
+OpenShift 4.1 development clusters. These clusters are automatically deleted 
+after 48 hours. As a result a new cluster must be created every 2 days. New 
+resources must be deployed to this cluster and the Cloudflare DNS zone for
+kscout.io must be updated to point to the new cluster. Additionally team members
+must be informed of the new cluster's details so they can update their 
+local toolchains.
 
 The auto cluster tool automates this entire process.  
 
