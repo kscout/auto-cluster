@@ -444,7 +444,8 @@ func main() {
 			Create: []Cluster{},
 		}
 
-		// youngClusters is a list of clusters which are less than 42 hours old
+		// youngClusters is a list of clusters which are less than
+		// Config.Cluster.OldestAge hours old
 		youngClusters := []Cluster{}
 
 		// primaryCluster is the cluster, existing or to be created, which
