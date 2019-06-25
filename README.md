@@ -7,24 +7,37 @@ its 48 hour lifespan.
 - [Run](#run)
 
 # Overview
-If a new cluster is needed program will:
+The kscout.io is currently hosted on temporary OpenShift 4.1 development 
+clusters. These clusters are automatically deleted after 48 hours. As a result
+a new cluster must be created every 2 days. New resources must be deployed to
+this cluster and the Cloudflare DNS zone for kscout.io must be updated to point
+to the new cluster.
+
+The auto cluster tool automates this entire process.  
+
+It acts similar to a Kubernetes controller, comparing the current and desired 
+states and planning out to reconcile differences.
+
+The auto cluster tool will run its control loop every 15 minutes. During each
+iteration it will ensure that there are no clusters which are getting too
+close to their automated deletion date. If any clusters are in danger of being 
+deleted the following steps will be completed:
 
 - Provision new cluster with `openshift-install` tool
-- Deploy resources in its namespace to new cluster
-- Point DNS to new cluster
 - Post new credentials to Slack
+- Migrate resources from the old development cluster to the new
+  development cluster
+- Point DNS to new cluster
+- Delete old development cluster
 
-Does this by running a simple control loop:
-
-- Resolve current state
-- Determine required actions
-- Perform required actions
-
-Assumptions are made about the use case:
+This tool is tailored for the use case of the KScout team. As such, several 
+assumptions are made:
 
 - DNS hosted on Cloudflare
-  - Holds only CNAME records pointing to the DNS setup by
-	`openshift-install` on AWS	
+- All applications deployed in the same namespace
+- Subset of Kuberntes resources used
+  - See the `migrate_types` variable in 
+	[`migrate-cluster.sh`](migrate-cluster.sh) for the list of resource types
 
 # Run
 ## AWS Credentials
@@ -43,8 +56,13 @@ your information. Save as a `.toml` file and place in the repository root.
 
 ```
 [Cluster]
+# Prefix to add to name when searching for / creating new clusters
 NamePrefix = "NAME PREFIX"
+
+# Oldest a cluster can be before it will be replaced
 OldestAge = 42 # hours, default
+
+# Namespace to migrate over to new development cluster
 Namespace = "YOUR NAMESPACE"
 
 [Cloudflare]
@@ -53,9 +71,11 @@ APIKey = "GLOBAL API KEY"
 ZoneID = "ZONEID"
 
 [OpenShiftInstall]
+# Directory where openshift-install will store cluster details
 StateStorePath = "PATH TO A DIRECTORY WHICH SCRIPT CAN WRITE TO"
 
 [Slack]
+# Slack incoming web hook used to post new cluster credentials
 IncomingWebhook = "https://hooks.slack.com/services/SECRET_SLACK_INFO
 ```
 
