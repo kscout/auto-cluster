@@ -4,7 +4,7 @@ hour lifespan.
 
 # Table Of Contents
 - [Overview](#overview)
-- [Run](#configuration)
+- [Run](#run)
 
 # Overview
 If a new cluster is needed program will:
@@ -12,6 +12,7 @@ If a new cluster is needed program will:
 - Provision new cluster with `openshift-install` tool
 - Deploy resources in its namespace to new cluster
 - Point DNS to new cluster
+- Post new credentials to Slack
 
 Does this by running a simple control loop:
 
@@ -23,7 +24,7 @@ Assumptions are made about the use case:
 
 - DNS hosted on Cloudflare
   - Holds only CNAME records pointing to the DNS setup by
-	`openshift-install` on AWS
+	`openshift-install` on AWS	
 
 # Run
 ## AWS Credentials
@@ -36,9 +37,49 @@ the default profile set `AWS_PROFILE`.
 If you do not have a `~/.aws/credentials` file set `AWS_ACCESS_KEY_ID`
 and `AWS_SECRET_ACCESS_KEY`.
 
+## Configuration File
+A configuration file is required. Modify the following configuration file with
+your information:
+
+```
+[Cluster]
+NamePrefix = "NAME PREFIX"
+OldestAge = 42 # hours, default
+
+[Cloudflare]
+Email = "CLOUDFLARE EMAIL"
+APIKey = "GLOBAL API KEY"
+ZoneID = "ZONEID"
+
+[OpenShiftInstall]
+StateStorePath = "PATH TO A DIRECTORY WHICH SCRIPT CAN WRITE TO"
+
+[Slack]
+IncomingWebhook = "https://hooks.slack.com/services/SECRET_SLACK_INFO
+```
+
+Posting the new cluster credentials to Slack requires that you have an incoming
+web hook setup. You can set this up via the Slack API dashboard.
+
+## Dry Run
+To see what the tool will do when it executes:
+
+```
+go run . -once -dry-run
+```
+
 ## One Time Invocation
 To run the control loop once:
 
 ```
 go run . -once
+```
+
+## Continuous Invocation
+*Unstable, wouldn't recommend*  
+
+To run every 15 minutes:
+
+```
+go run .
 ```
