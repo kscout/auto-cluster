@@ -455,7 +455,7 @@ func main() {
 
 		// {{{4 Group clusters as old (older than cfg.Cluster.OldestAge) or young
 		for _, cluster := range clusters {
-			// Delete old clusters
+			// Plan to delete old clusters
 			if cluster.Age.Hours() > cfg.Cluster.OldestAge {
 				osInstallPlan.Delete = append(osInstallPlan.Delete,
 					cluster)
@@ -466,10 +466,10 @@ func main() {
 
 		// {{{4 Figure out what to do with young clusters
 		if len(youngClusters) == 0 { // If no young clusters we have to create a new one
-			// Get next cluster number
+			// {{{5 Get next cluster number
 			maxClusterNum := int64(0)
 
-			// Find highest value numeric prefix on cluster names
+			// {{{6 Find highest value numeric prefix on cluster names
 			for _, cluster := range clusters {
 				numStr := strings.ReplaceAll(cluster.Name,
 					cfg.Cluster.NamePrefix, "")
@@ -484,7 +484,7 @@ func main() {
 				}
 			}
 
-			// Add 1 to highest found numeric prefix
+			// {{{6 Add 1 to highest found numeric prefix
 			nextClusterNum := maxClusterNum + 1
 			nextClusterNumStr := fmt.Sprintf("%d", nextClusterNum)
 			if nextClusterNum < 10 {
@@ -492,7 +492,7 @@ func main() {
 					nextClusterNumStr)
 			}
 
-			// Plan to create new cluster
+			// {{{5 Plan to create new cluster
 			c := Cluster{
 				Name: fmt.Sprintf("%s%s", cfg.Cluster.NamePrefix,
 					nextClusterNumStr),
@@ -502,7 +502,7 @@ func main() {
 			primaryCluster = &c
 
 		} else if len(youngClusters) > 1 { // More than 1 young clusters exist, delete all but the youngest
-			// Find youngest cluster
+			// {{{5 Find youngest cluster
 			youngestAge := float64(48)
 			youngestName := ""
 
@@ -514,7 +514,7 @@ func main() {
 				}
 			}
 
-			// Plan to delete all but youngest cluster
+			// {{{5 Plan to delete all but youngest cluster
 			for _, cluster := range youngClusters {
 				if cluster.Name != youngestName {
 					osInstallPlan.Delete = append(osInstallPlan.Delete,
@@ -537,7 +537,6 @@ func main() {
 		}
 
 		if !primaryCluster.DNSPointed {
-
 			// Point all records to primary cluster
 			for _, record := range records {
 				if record.ClusterName == primaryCluster.Name {
