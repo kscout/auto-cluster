@@ -336,6 +336,14 @@ func main() {
 				// For each instance
 				INSTANCES_FOR:
 				for _, instance := range reservation.Instances {
+					// Ensure is running
+					// See state code documentation: https://docs.aws.amazon.com/sdk-for-go/api/service/ec2/#InstanceState
+					// state code 16 is running, anything past running
+					// we want to ignore
+					if *instance.State.Code > int64(16) {
+						continue
+					}
+					
 					// For each tag
 					for _, tag := range instance.Tags {
 						// If name tag
