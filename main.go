@@ -56,13 +56,13 @@ type Config struct {
 	OpenShiftInstall struct {
 		// StateStorePath is the directory openshift-install state is stored
 		StateStorePath string `validate:"required"`
-	}
+	} `validate:"required"`
 
 	// Slack configuration
 	Slack struct {
 		// IncomingWebhook is a Slack API incoming webhook to a channel where the new cluster's credentials will be placed
 		IncomingWebhook string `validate:"required"`
-	}
+	} `validate:"required"`
 }
 
 // Flags provided by command line invocation
