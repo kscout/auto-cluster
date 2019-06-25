@@ -18,15 +18,16 @@ local toolchains.
 The auto cluster tool automates this entire process.  
 
 It acts similar to a Kubernetes controller, comparing the current and desired 
-states and planning out to reconcile differences.
+states and planning how to reconcile differences.
 
 The auto cluster tool will run its control loop every 15 minutes. During each
 iteration it will ensure that there are no clusters which are getting too
 close to their automated deletion date. If any clusters are in danger of being 
-deleted the following steps will be completed:
+deleted the following steps are taken:
 
-- Provision new cluster with `openshift-install` tool
-- Post new credentials to Slack
+- Provision new cluster with the 
+  [OpenShift installer tool](https://github.com/openshift/installer)
+- Post new cluster credentials to the Slack
 - Migrate resources from the old development cluster to the new
   development cluster
 - Point DNS to new cluster
