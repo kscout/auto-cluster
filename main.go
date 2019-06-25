@@ -665,33 +665,6 @@ func main() {
 			}
 		}
 
-		// {{{4 OpenShift install delete
-		logger.Debugf("execute OpenShift install delete")
-		for _, cluster := range osInstallPlan.Delete {
-			// {{{6 Dry run
-			if flags.DryRun {
-				logger.Debugf("would exec %s -s %s -a delete -n %s",
-					runOpenShiftInstallScript,
-					cfg.OpenShiftInstall.StateStorePath,
-					cluster.Name)
-				continue
-			}
-
-			// {{{6 Delete
-			cmd := exec.Command(runOpenShiftInstallScript,
-				"-s", cfg.OpenShiftInstall.StateStorePath,
-				"-a", "delete",
-				"-n", cluster.Name)
-			err := runCmd(logger.GetChild("openshift-install.delete.stdout"),
-				logger.GetChild("openshift-install.delete.stderr"), cmd)
-			if err != nil {
-				logger.Fatalf("failed to delete cluster %s: %s",
-					cluster.Name, err.Error())
-			}
-
-			logger.Debugf("delete cluster %s", cluster.Name)
-		}
-
 		// {{{4 CloudflareDNS
 		logger.Debug("execute Cloudflare DNS set")
 		for _, record := range cfDNSPlan.Set {
@@ -707,6 +680,36 @@ func main() {
 				logger.Fatalf("failed to update Cloudflare DNS record %s: %s",
 					record.Record.Name, err.Error())
 			}
+
+			logger.Debugf("updated Cloudflare DNS record.Name=%s to record.Content=%s",
+				record.Record.Name, record.Record.Content)
+		}
+
+		// {{{4 OpenShift install delete
+		logger.Debugf("execute OpenShift install delete")
+		for _, cluster := range osInstallPlan.Delete {
+			// {{{5 Dry run
+			if flags.DryRun {
+				logger.Debugf("would exec %s -s %s -a delete -n %s",
+					runOpenShiftInstallScript,
+					cfg.OpenShiftInstall.StateStorePath,
+					cluster.Name)
+				continue
+			}
+
+			// {{{5 Delete
+			cmd := exec.Command(runOpenShiftInstallScript,
+				"-s", cfg.OpenShiftInstall.StateStorePath,
+				"-a", "delete",
+				"-n", cluster.Name)
+			err := runCmd(logger.GetChild("openshift-install.delete.stdout"),
+				logger.GetChild("openshift-install.delete.stderr"), cmd)
+			if err != nil {
+				logger.Fatalf("failed to delete cluster %s: %s",
+					cluster.Name, err.Error())
+			}
+
+			logger.Debugf("delete cluster %s", cluster.Name)
 		}
 
 		// {{{2 Determine when to run next control loop
