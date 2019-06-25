@@ -18,7 +18,7 @@
 #?
 
 # Configuration
-migrate_types=imagestream,configmap,secret,deploymentconfig,deployment,statefulset,pod,service,ingress
+migrate_types=imagestream,configmap,secret,deploymentconfig,deployment,statefulset,service,ingress,routes,template
 
 # Helpers
 prog_dir=$(realpath $(dirname "$0"))
@@ -74,11 +74,14 @@ fi
 # Try authenticating with each cluster
 bold "Testing authentication"
 
-if ! KUBECONFIG="$state_dir/$from/auth/kubeconfig" oc get pods; then
+from_kubeconfig="$state_dir/$from/auth/kubeconfig"
+to_kubeconfig="$state_dir/$to/auth/kubeconfig"
+
+if ! KUBECONFIG="$from_kubeconfig" oc get pods; then
     die "Failed to test authentication to $from cluster"
 fi
 
-if ! KUBECONFIG="$state_dir/$to/auth/kubeconfig" oc get pods; then
+if ! KUBECONFIG="$to_kubeconfig" oc get pods; then
     die "Failed to test authentication to $to cluster"
 fi
 
@@ -87,18 +90,20 @@ bold "Exporting resources from $from cluster"
 
 from_f="/tmp/from-$from.json"
 
-if ! KUBECONFIG="$state_dir/$from/auth/kubeconfig" oc get -n "$ns" "$migrate_types" -o json > "$from_f"; then
+if ! KUBECONFIG="$from_kubeconfig" oc get -n "$ns" "$migrate_types" -o json > "$from_f"; then
     rm "$from_f" || true
     die "Failed to export resources from $from cluster"
 fi
 
 bold "Importing resources to $to cluster"
 
-if ! KUBECONFIG="$state_dir/$to/auth/kubeconfig" oc new-project "$ns"; then
-    die "Failed to create new namespace $ns on $to cluster"
+if ! KUBECONFIG="$to_kubeconfig" oc get ns | grep "$ns"; then
+    if ! KUBECONFIG="$to_kubeconfig" oc new-project "$ns"; then
+	die "Failed to create new namespace $ns on $to cluster"
+    fi
 fi
 
-if ! KUBECONFIG="$state_dir/$to/auth/kubeconfig" oc apply -n "$ns" -f "$from_f"; then
+if ! KUBECONFIG="$to_kubeconfig" oc apply -n "$ns" -f "$from_f"; then
     rm "$from_f" || true
     die "Failed to import resources to $to cluster"
 fi
