@@ -14,6 +14,7 @@ import (
 	"bytes"
 	"net/http"
 	"encoding/json"
+	"bufio"
 	
 	"github.com/Noah-Huppert/goconf"
 	"github.com/Noah-Huppert/golog"
@@ -165,6 +166,43 @@ func (p CFDNSActionPlan) String() string {
 	}
 
 	return out
+}
+
+// runCmd runs a command as a subprocess, handles printing out stdout and stderr
+func runCmd(stdoutLogger, stderrLogger golog.Logger, cmd *exec.Cmd) error {
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return fmt.Errorf("failed to get stdout pipe: %s", err.Error())
+	}
+
+	go func() {
+		scanner := bufio.NewScanner(stdout)
+		for scanner.Scan() {
+			stdoutLogger.Debug(scanner.Text())
+		}
+	}()
+
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return fmt.Errorf("failed to get stderr pipe: %s", err.Error())
+	}
+
+	go func() {
+		scanner := bufio.NewScanner(stderr)
+		for scanner.Scan() {
+			stdoutLogger.Debug(scanner.Text())
+		}
+	}()
+	
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("failed to start command: %s", err.Error())
+	}
+
+	if err := cmd.Wait(); err != nil {
+		return fmt.Errorf("failed to wait for command to complete: %s", err.Error())
+	}
+
+	return nil
 }
 
 func main() {
@@ -499,15 +537,14 @@ func main() {
 				"-s", cfg.OpenShiftInstall.StateStorePath,
 				"-a", "create",
 				"-n", cluster.Name)
-			if err := cmd.Run(); err != nil {
-				if exitErr, ok := err.(*exec.ExitError); ok {
-					logger.Errorf("%s create stderr: %#v",
-						runOpenShiftInstallScript,
-						exitErr.Stderr)
-				}
+			err := runCmd(logger.GetChild("openshift-install.create.stdout"),
+				logger.GetChild("openshift-install.create.stderr"), cmd)
+			if err != nil {
 				logger.Fatalf("failed to create cluster %s: %s",
 					cluster.Name, err.Error())
 			}
+
+			logger.Debugf("created cluster %s", cluster.Name)
 
 			// {{{5 Post new credentials to Slack
 			// {{{6 Get kubeadmin user dashboard password
@@ -559,15 +596,14 @@ func main() {
 				"-s", cfg.OpenShiftInstall.StateStorePath,
 				"-a", "delete",
 				"-n", cluster.Name)
-			if err := cmd.Run(); err != nil {
-				if exitErr, ok := err.(*exec.ExitError); ok {
-					logger.Errorf("%s create stderr: %#v",
-						runOpenShiftInstallScript,
-						exitErr.Stderr)
-				}
+			err := runCmd(logger.GetChild("openshift-install.delete.stdout"),
+				logger.GetChild("openshift-install.delete.stderr"), cmd)
+			if err != nil {
 				logger.Fatalf("failed to delete cluster %s: %s",
 					cluster.Name, err.Error())
 			}
+
+			logger.Debugf("delete cluster %s", cluster.Name)
 		}
 
 		// {{{4 CloudflareDNS
