@@ -1,6 +1,6 @@
 # Auto Cluster
-Automatically migrates the cluster when it is reaching the end of its 48
-hour lifespan.
+Automatically creates a new cluster when the current one is reaching the end of
+its 48 hour lifespan.
 
 # Table Of Contents
 - [Overview](#overview)
@@ -10,7 +10,8 @@ hour lifespan.
 If a new cluster is needed program will:
 
 - Provision new cluster with `openshift-install` tool
-- Deploy resources in its namespace to new cluster
+- ~Deploy resources in its namespace to new cluster~ (Out of scope for now,
+  Maybe one day)
 - Point DNS to new cluster
 - Post new credentials to Slack
 
