@@ -35,6 +35,9 @@ type Config struct {
 
 		// OldestAge a cluster can be before being deleted, in hours
 		OldestAge float64 `validate:"min=0,max=48" default:"42"`
+
+		// Namespace to migrate
+		Namespace string `validate:"required"`
 	} `validate:"required"`
 	
 	// Cloudflare configuration
@@ -168,6 +171,24 @@ func (p CFDNSActionPlan) String() string {
 	return out
 }
 
+// MigrateActionPlan is a plan to migrate resources from one OpenShift cluster to another
+type MigrateActionPlan struct {
+	// From cluster, Cluster.Name field is the only value used.
+	From Cluster
+
+	// To cluster, Cluster.Name field is the only value used.
+	To Cluster
+
+	// Namespace to migrate
+	Namespace string
+}
+
+// String representation of MigrateActionPlan
+func (p MigrateActionPlan) String() string {
+	return fmt.Sprintf("From.Name=%s, To.Name=%s, Namespace=%s",
+		p.From.Name, p.To.Name, p.Namespace)
+}
+
 // runCmd runs a command as a subprocess, handles printing out stdout and stderr
 func runCmd(stdoutLogger, stderrLogger golog.Logger, cmd *exec.Cmd) error {
 	stdout, err := cmd.StdoutPipe()
@@ -238,9 +259,17 @@ func main() {
 	if err != nil {
 		logger.Fatalf("failed to get working directory: %s", err.Error())
 	}
+
+	// {{{3 run-openshift-install.sh script
 	runOpenShiftInstallScript := filepath.Join(cwd, "run-openshift-install.sh")
 	if _, err := os.Stat(runOpenShiftInstallScript); err != nil {
 		logger.Fatalf("failed to stat run-openshift-install.sh: %s", err.Error())
+	}
+
+	// {{{3 migrate-cluster.sh script
+	migrateClusterScript := filepath.Join(cwd, "migrate-cluster.sh")
+	if _, err := os.Stat(migrateClusterScript); err != nil {
+		logger.Fatalf("failed to stat migrate-cluster.sh: %s", err.Error())
 	}
 
 	// {{{1 API setup
@@ -518,15 +547,33 @@ func main() {
 			}
 		}
 
+		// {{{3 Cluster migrate plan
+		var migratePlan *MigrateActionPlan = nil
+		
+		if primaryCluster.Name != recordsCluster {
+			migratePlan = &MigrateActionPlan{
+				From: Cluster{
+					Name: recordsCluster,
+				},
+				To: *primaryCluster,
+				Namespace: cfg.Cluster.Namespace,
+			}
+		}
+
 		// {{{3 Log plan
-		logger.Debugf("OpenShift install plan: %s", osInstallPlan.String())
-		logger.Debugf("Cloudflare DNS plan: %s", cfDNSPlan.String())
+		logger.Debugf("OpenShift install plan: %s", osInstallPlan)
+		logger.Debugf("Cloudflare DNS plan: %s", cfDNSPlan)
+
+		if migratePlan == nil {
+			logger.Debugf("migrate plan: none")
+		} else {
+			logger.Debugf("migrate plan: %s", *migratePlan)
+		}
 		logger.Debugf("primary cluster=%s", *primaryCluster)
 
 		// {{{3 Execute plans
 		logger.Debug("execute stage")
-		// {{{4 OpenShift install
-		// {{{5 Create before we delete
+		// {{{4 OpenShift install create
 		logger.Debugf("execute OpenShift install create")
 		
 		for _, cluster := range osInstallPlan.Create {
@@ -587,7 +634,38 @@ func main() {
 			}
 		}
 
-		// {{{5 Delete clusters
+		// {{{4 Migrate
+		logger.Debugf("execute migrate")
+		if migratePlan != nil {
+			if flags.DryRun {
+				logger.Debugf("would exec %s -s %s -f %s -t %s -n %s",
+					migrateClusterScript,
+					cfg.OpenShiftInstall.StateStorePath,
+					migratePlan.From.Name,
+					migratePlan.To.Name,
+					cfg.Cluster.Namespace)
+				
+			} else {
+				cmd := exec.Command(migrateClusterScript,
+					"-s", cfg.OpenShiftInstall.StateStorePath,
+					"-f", migratePlan.From.Name,
+					"-t", migratePlan.To.Name,
+					"-n", migratePlan.Namespace)
+				err := runCmd(logger.GetChild("migrate-cluster.stdout"),
+					logger.GetChild("migrate-cluster.stderr"), cmd)
+				if err != nil {
+					logger.Fatalf("failed to migrate %s namespace from %s cluster to %s cluster",
+						migratePlan.Namespace, migratePlan.From.Name,
+						migratePlan.To.Name)
+				}
+
+				logger.Debugf("migrated %s namespace from %s cluster to %s cluster",
+					migratePlan.Namespace, migratePlan.From.Name,
+					migratePlan.To.Name)
+			}
+		}
+
+		// {{{4 OpenShift install delete
 		logger.Debugf("execute OpenShift install delete")
 		for _, cluster := range osInstallPlan.Delete {
 			// {{{6 Dry run

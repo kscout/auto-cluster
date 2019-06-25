@@ -10,7 +10,7 @@ its 48 hour lifespan.
 If a new cluster is needed program will:
 
 - Provision new cluster with `openshift-install` tool
-- ~Deploy resources in its namespace to new cluster~ (Out of scope for now,
+- Deploy resources in its namespace to new cluster
   Maybe one day)
 - Point DNS to new cluster
 - Post new credentials to Slack
@@ -46,6 +46,7 @@ your information. Save as a `.toml` file and place in the repository root.
 [Cluster]
 NamePrefix = "NAME PREFIX"
 OldestAge = 42 # hours, default
+Namespace = "YOUR NAMESPACE"
 
 [Cloudflare]
 Email = "CLOUDFLARE EMAIL"
