@@ -31,7 +31,7 @@ Assumptions are made about the use case:
 ## AWS Credentials
 AWS credentials must be provided.
 
-If you have a `~/.aws/credentials` file and the credentials you which to use are
+If you have a `~/.aws/credentials` file and the credentials you wish to use are
 the default profile you do not have to do anything. If you do not want to use
 the default profile set `AWS_PROFILE`.
 
@@ -40,7 +40,7 @@ and `AWS_SECRET_ACCESS_KEY`.
 
 ## Configuration File
 A configuration file is required. Modify the following configuration file with
-your information:
+your information. Save as a `.toml` file and place in the repository root.
 
 ```
 [Cluster]
