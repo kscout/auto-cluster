@@ -70,7 +70,8 @@ type Flags struct {
 	// Once indicates the control loop should only be run once and then the program should exit
 	Once bool
 
-	// DryRun does not perform any actions, instead outputs what would happen to stdout
+	// DryRun makes program not perform any actions instead will output what
+	// would happen to stdout
 	DryRun bool
 }
 
