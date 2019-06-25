@@ -449,7 +449,8 @@ func main() {
 		youngClusters := []Cluster{}
 
 		// primaryCluster is the cluster, existing or to be created, which
-		// will be used
+		// will be used to host the site. This means developers will access this
+		// cluster via oc and end users will access this cluster via a domain.
 		var primaryCluster *Cluster = nil
 
 		// {{{4 Group clusters as old (older than cfg.Cluster.OldestAge) or young
