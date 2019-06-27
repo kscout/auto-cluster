@@ -39,8 +39,8 @@ assumptions are made:
 - DNS hosted on Cloudflare
 - All applications deployed in the same namespace
 - Subset of Kuberntes resources used
-  - See the `migrate_types` variable in 
-	[`migrate-cluster.sh`](migrate-cluster.sh#L21) for the list of resource types
+  - See the [`migrate_types` variable in 
+	`migrate-cluster.sh`](migrate-cluster.sh#L21) for the list of resource types
 
 # Run
 ## AWS Credentials

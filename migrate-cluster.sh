@@ -18,7 +18,7 @@
 #?
 
 # Configuration
-migrate_types=imagestream,configmap,secret,deploymentconfig,deployment,statefulset,service,ingress,routes,template
+migrate_types=imagestream,configmap,secret,deploymentconfig,deployment,statefulset,service,ingress,routes,template,pv,pvc
 
 # Helpers
 prog_dir=$(realpath $(dirname "$0"))
