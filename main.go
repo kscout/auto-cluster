@@ -1,21 +1,21 @@
 package main
 
 import (
-	"time"
+	"bufio"
+	"bytes"
+	"encoding/json"
 	"flag"
-	"os"
-	"strings"
 	"fmt"
-	"regexp"
-	"strconv"
+	"io/ioutil"
+	"net/http"
+	"os"
 	"os/exec"
 	"path/filepath"
-	"io/ioutil"
-	"bytes"
-	"net/http"
-	"encoding/json"
-	"bufio"
-	
+	"regexp"
+	"strconv"
+	"strings"
+	"time"
+
 	"github.com/Noah-Huppert/goconf"
 	"github.com/Noah-Huppert/golog"
 	"github.com/aws/aws-sdk-go/aws"
@@ -39,12 +39,12 @@ type Config struct {
 		// Namespace to migrate
 		Namespace string `validate:"required"`
 	} `validate:"required"`
-	
+
 	// Cloudflare configuration
 	Cloudflare struct {
 		// Email address of account
 		Email string `validate:"required"`
-		
+
 		// APIKey
 		APIKey string `validate:"required"`
 
@@ -128,7 +128,7 @@ func (r CFDNSRecord) String() string {
 type OSInstallActionPlan struct {
 	// Create clusters. The Cluster.Name field is the only value used.
 	Create []Cluster
-	
+
 	// Delete clusters. The Cluster.Name field is the only value used.
 	Delete []Cluster
 }
@@ -215,7 +215,7 @@ func runCmd(stdoutLogger, stderrLogger golog.Logger, cmd *exec.Cmd) error {
 			stdoutLogger.Debug(scanner.Text())
 		}
 	}()
-	
+
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("failed to start command: %s", err.Error())
 	}
@@ -256,7 +256,7 @@ func main() {
 	flag.Parse()
 
 	// {{{2 Find auxiliary scripts
-	cwd, err := os.Getwd();
+	cwd, err := os.Getwd()
 	if err != nil {
 		logger.Fatalf("failed to get working directory: %s", err.Error())
 	}
@@ -281,7 +281,7 @@ func main() {
 	if err != nil {
 		logger.Fatalf("failed to create AWS session: %s", err.Error())
 	}
-	
+
 	ec2 := ec2Svc.New(awsSess)
 
 	// {{{2 Cloudflare
@@ -294,11 +294,11 @@ func main() {
 	if flags.Once {
 		logger.Info("running control loop once")
 	}
-	
+
 	for {
 		// {{{2 Get state
 		logger.Debug("get state stage")
-		
+
 		// clusters found, keys are cluster names
 		clusters := map[string]Cluster{}
 
@@ -312,7 +312,7 @@ func main() {
 		}
 
 		records := []CFDNSRecord{}
-		RECORDS_FOR:
+	RECORDS_FOR:
 		for _, record := range rawRecords {
 			if !strings.Contains(record.Content, cfg.Cluster.NamePrefix) {
 				continue
@@ -322,11 +322,11 @@ func main() {
 				if strings.HasPrefix(part, cfg.Cluster.NamePrefix) {
 					cfDNSRecord := CFDNSRecord{
 						ClusterName: part,
-						Record: record,
+						Record:      record,
 					}
 					records = append(records, cfDNSRecord)
 					logger.Debugf("found Cloudflare DNS record: %s", cfDNSRecord.String())
-					
+
 					continue RECORDS_FOR
 				}
 			}
@@ -364,7 +364,7 @@ func main() {
 
 			for _, reservation := range resp.Reservations {
 				// For each instance
-				INSTANCES_FOR:
+			INSTANCES_FOR:
 				for _, instance := range reservation.Instances {
 					// Ensure is running
 					// See state code documentation: https://docs.aws.amazon.com/sdk-for-go/api/service/ec2/#InstanceState
@@ -373,7 +373,7 @@ func main() {
 					if *instance.State.Code > int64(16) {
 						continue
 					}
-					
+
 					// For each tag
 					for _, tag := range instance.Tags {
 						// If name tag
@@ -381,7 +381,7 @@ func main() {
 							// If name matches cluster prefix
 							if strings.HasPrefix(*tag.Value, cfg.Cluster.NamePrefix) {
 								ec2Instance := EC2Instance{
-									Name: *tag.Value,
+									Name:      *tag.Value,
 									CreatedOn: *instance.LaunchTime,
 								}
 								clusterInstances = append(clusterInstances, ec2Instance)
@@ -423,10 +423,10 @@ func main() {
 			if _, ok := clusters[clusterName]; ok {
 				continue
 			}
-			
+
 			clusters[clusterName] = Cluster{
-				Name: clusterName,
-				Age: time.Since(instance.CreatedOn),
+				Name:       clusterName,
+				Age:        time.Since(instance.CreatedOn),
 				DNSPointed: clusterName == recordsCluster,
 			}
 		}
@@ -437,7 +437,7 @@ func main() {
 
 		// {{{2 Determine what must be done given existing state
 		logger.Debug("plan stage")
-		
+
 		// {{{3 OpenShift install plan
 		osInstallPlan := OSInstallActionPlan{
 			Delete: []Cluster{},
@@ -497,8 +497,8 @@ func main() {
 				Name: fmt.Sprintf("%s%s", cfg.Cluster.NamePrefix,
 					nextClusterNumStr),
 			}
-				
-			osInstallPlan.Create = []Cluster{ c }
+
+			osInstallPlan.Create = []Cluster{c}
 			primaryCluster = &c
 
 		} else if len(youngClusters) > 1 { // More than 1 young clusters exist, delete all but the youngest
@@ -551,14 +551,19 @@ func main() {
 
 		// {{{3 Cluster migrate plan
 		var migratePlan *MigrateActionPlan = nil
-		
+
+		// If DNS pointed to a different cluster probably means primary cluster used to be
+		// a different.
 		if primaryCluster.Name != recordsCluster {
-			migratePlan = &MigrateActionPlan{
-				From: Cluster{
-					Name: recordsCluster,
-				},
-				To: *primaryCluster,
-				Namespace: cfg.Cluster.Namespace,
+			// If cluster DNS is pointing to exists, then migrate from
+			if _, ok := clusters[recordsCluster]; ok {
+				migratePlan = &MigrateActionPlan{
+					From: Cluster{
+						Name: recordsCluster,
+					},
+					To:        *primaryCluster,
+					Namespace: cfg.Cluster.Namespace,
+				}
 			}
 		}
 
@@ -577,7 +582,7 @@ func main() {
 		logger.Debug("execute stage")
 		// {{{4 OpenShift install create
 		logger.Debugf("execute OpenShift install create")
-		
+
 		for _, cluster := range osInstallPlan.Create {
 			// {{{5 Dry run
 			if flags.DryRun {
@@ -646,7 +651,7 @@ func main() {
 					migratePlan.From.Name,
 					migratePlan.To.Name,
 					cfg.Cluster.Namespace)
-				
+
 			} else {
 				cmd := exec.Command(migrateClusterScript,
 					"-s", cfg.OpenShiftInstall.StateStorePath,
