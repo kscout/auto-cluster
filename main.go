@@ -469,14 +469,28 @@ func main() {
 			// {{{5 Get next cluster number
 			maxClusterNum := int64(0)
 
-			// {{{6 Find highest value numeric prefix on cluster names
-			for _, cluster := range clusters {
-				numStr := strings.ReplaceAll(cluster.Name,
+			// {{{6 Find highest numeric value in openshift install data store path
+			dirs, err := ioutil.ReadDir(cfg.OpenShiftInstall.StateStorePath)
+			if err != nil {
+				logger.Fatalf("failed to read existing cluster credentials directory")
+			}
+
+			for _, dir := range dirs {
+				if !dir.IsDir() {
+					continue
+				}
+
+				if !strings.HasPrefix(dir.Name(), cfg.Cluster.NamePrefix) {
+					continue
+				}
+
+				numStr := strings.ReplaceAll(dir.Name(),
 					cfg.Cluster.NamePrefix, "")
 				num, err := strconv.ParseInt(numStr, 10, 64)
 				if err != nil {
 					logger.Fatalf("failed to parse cluster number for "+
-						"%s: %s", cluster.Name, err.Error())
+						"previous cluster credentials directory %s: %s",
+						dir.Name(), err.Error())
 				}
 
 				if num > maxClusterNum {
