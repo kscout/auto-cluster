@@ -73,6 +73,9 @@ type Flags struct {
 	// DryRun makes program not perform any actions instead will output what
 	// would happen to stdout
 	DryRun bool
+
+	// NoDNS indicates the control loop should not modify DNS records
+	NoDNS bool
 }
 
 // Cluster is the state of a cluster
@@ -120,8 +123,8 @@ type CFDNSRecord struct {
 
 // String representation of CFDNSRecord
 func (r CFDNSRecord) String() string {
-	return fmt.Sprintf("ClusterName=%s, Record.Name=%s",
-		r.ClusterName, r.Record.Name)
+	return fmt.Sprintf("ClusterName=%s, Record.Name=%s, Record.ID=%s, Record.Content=%s",
+		r.ClusterName, r.Record.Name, r.Record.ID, r.Record.Content)
 }
 
 // OSInstallActionPlan is a plan of actions for the openshift-install tool
@@ -159,17 +162,13 @@ type CFDNSActionPlan struct {
 
 // String representation of CFDNSActionPlan
 func (p CFDNSActionPlan) String() string {
-	out := ""
+	setStrs := []string{}
 
-	for i, record := range p.Set {
-		if i > 0 {
-			out += "\n"
-		}
-		out += fmt.Sprintf("set Record.Name=%s to Record.Content=%s",
-			record.Record.Name, record.Record.Content)
+	for _, record := range p.Set {
+		setStrs = append(setStrs, record.String())
 	}
 
-	return out
+	return fmt.Sprintf("Set=[%s]", strings.Join(setStrs, ", "))
 }
 
 // MigrateActionPlan is a plan to migrate resources from one OpenShift cluster to another
@@ -253,6 +252,7 @@ func main() {
 	flags := Flags{}
 	flag.BoolVar(&flags.Once, "once", false, "run control loop once and exit")
 	flag.BoolVar(&flags.DryRun, "dry-run", false, "do not perform actions")
+	flag.BoolVar(&flags.NoDNS, "no-dns", false, "do not modify DNS")
 	flag.Parse()
 
 	// {{{2 Find auxiliary scripts
@@ -568,7 +568,7 @@ func main() {
 
 		// If DNS pointed to a different cluster probably means primary cluster used to be
 		// a different.
-		if primaryCluster.Name != recordsCluster {
+		if !flags.NoDNS && primaryCluster.Name != recordsCluster {
 			// If cluster DNS is pointing to exists, then migrate from
 			if _, ok := clusters[recordsCluster]; ok {
 				migratePlan = &MigrateActionPlan{
@@ -583,6 +583,7 @@ func main() {
 
 		// {{{3 Log plan
 		logger.Debugf("OpenShift install plan: %s", osInstallPlan)
+
 		logger.Debugf("Cloudflare DNS plan: %s", cfDNSPlan)
 
 		if migratePlan == nil {

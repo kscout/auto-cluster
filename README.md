@@ -107,3 +107,10 @@ To run every 15 minutes:
 ```
 go run .
 ```
+
+# No DNS
+To run the tool and ensure that no DNS changes will be made:
+
+```
+go run . -no-dns
+```
