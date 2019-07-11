@@ -637,7 +637,7 @@ func main() {
 			buf := bytes.NewBuffer([]byte{})
 			encoder := json.NewEncoder(buf)
 			msg := map[string]string{
-				"text": fmt.Sprintf("*New cluster*\n"+
+				"text": fmt.Sprintf("*New temporary OpenShift 4.1 cluster*\n"+
 					"*URL*: `https://console-openshift-console.apps.%s.devcluster.openshift.com`\n"+
 					"*Username*: `kubeadmin`\n"+
 					"*Password*: `%s`",
