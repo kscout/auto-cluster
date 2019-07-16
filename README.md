@@ -5,6 +5,7 @@ its 48 hour lifespan.
 # Table Of Contents
 - [Overview](#overview)
 - [Run](#run)
+- [Container](#container)
 
 # Overview
 The [kscout.io](https://kscout.io) site is currently hosted on temporary 
@@ -56,6 +57,9 @@ and `AWS_SECRET_ACCESS_KEY`.
 ## Configuration File
 A configuration file is required. Modify the following configuration file with
 your information. Save as a `.toml` file and place in the repository root.
+
+The auto cluster loads TOML files as configuration from the `/etc/auto-cluster` 
+directory and the working directory.
 
 ```toml
 [Cluster]
@@ -113,4 +117,24 @@ To run the tool and ensure that no DNS changes will be made:
 
 ```
 go run . -no-dns
+```
+
+# Container
+The `docker.io/kscout/auto-cluster:latest` Docker image is available for use:
+
+```
+docker run \
+	-it \
+	--rm \
+	-e AWS_ACCESS_KEY_ID=<aws access key ID> \
+	-e AWS_SECRET_ACCESS_KEY=<aws secret access key> \
+	-v "$PWD/config.toml:/etc/auto-cluster" \
+	kscout/auto-cluster:latest
+```
+
+## Container Development
+Build and push:
+
+```
+make docker
 ```
