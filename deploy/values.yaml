@@ -15,8 +15,8 @@ image:
 # See auto cluster tool docs for config file schema.
 autoCluster:
   Cluster:
-    NamePrefix: nhuppert-kscout
+    NamePrefix: '"nhuppert-kscout"'
     OldestAge: 42
-    Namespace: kscout
+    Namespace: '"kscout"'
   OpenShiftInstall:
-    StateStorePath: /mnt/data
+    StateStorePath: '"/mnt/data"'

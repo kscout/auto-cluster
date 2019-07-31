@@ -1,6 +1,6 @@
 {{- range $section, $values := .Values.autoCluster }}
 [{{ $section }}]
 {{- range $k, $v :=  $values }}
-{{ $k }} = "{{ $v }}"
+{{ $k }} = {{ $v }}
 {{- end }}
 {{- end }}
