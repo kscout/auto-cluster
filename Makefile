@@ -23,7 +23,6 @@ deploy:
 		--set global.app=${APP} \
 		${SET_ARGS} deploy \
 	| ${KUBE_APPLY}
-	oc rollout status "dc/${ENV}-${APP}"
 
 # remove deployment for ENV
 rm-deploy:
