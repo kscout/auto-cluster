@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -10,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -231,6 +233,19 @@ func main() {
 	// {{{2 Logger
 	logger := golog.NewStdLogger("auto-cluster")
 
+	// {{{2 Graceful exit
+	ctx, cancelCtx := context.WithCancel(context.Background())
+
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, os.Interrupt)
+
+	go func() {
+		<-sigs
+		cancelCtx()
+		logger.Info("received interrupt signal, will exit gracefully at the " +
+			"end of the next controll loop execution")
+	}()
+
 	// {{{2 Configuration
 	cfgLdr := goconf.NewDefaultLoader()
 	cfgLdr.AddConfigPath("/etc/auto-cluster/*.toml")
@@ -298,452 +313,462 @@ func main() {
 		logger.Info("running control loop once")
 	}
 
+	ctrlLoopTimer := time.NewTimer(0)
+
 	for {
-		// {{{2 Get state
-		logger.Debug("get state stage")
+		select {
+		case <-ctx.Done():
+			logger.Info("control loop execution finished, exiting")
+			return
+			break
+		case <-ctrlLoopTimer.C:
+			// {{{2 Get state
+			logger.Debug("get state stage")
 
-		// clusters found, keys are cluster names
-		clusters := map[string]Cluster{}
+			// clusters found, keys are cluster names
+			clusters := map[string]Cluster{}
 
-		// {{{3 Get DNS entries
-		rawRecords, err := cf.DNSRecords(cfg.Cloudflare.ZoneID, cloudflare.DNSRecord{
-			Type: "CNAME",
-		})
-		if err != nil {
-			logger.Fatalf("failed to get Cloudflare DNS records: %s",
-				err.Error())
-		}
-
-		records := []CFDNSRecord{}
-	RECORDS_FOR:
-		for _, record := range rawRecords {
-			if !strings.Contains(record.Content, cfg.Cluster.NamePrefix) {
-				continue
-			}
-
-			for _, part := range strings.Split(record.Content, ".") {
-				if strings.HasPrefix(part, cfg.Cluster.NamePrefix) {
-					cfDNSRecord := CFDNSRecord{
-						ClusterName: part,
-						Record:      record,
-					}
-					records = append(records, cfDNSRecord)
-					logger.Debugf("found Cloudflare DNS record: %s", cfDNSRecord.String())
-
-					continue RECORDS_FOR
-				}
-			}
-		}
-
-		// {{{3 Determine which cluster DNS records are currently pointing at
-		// recordsCluster is the name of the cluster which records point to.
-		// If this value is empty after the following for loop then the records
-		// are pointing to multiple clusters
-		recordsCluster := ""
-
-		for _, record := range records {
-			if recordsCluster == "" {
-				recordsCluster = record.ClusterName
-			} else if recordsCluster != record.ClusterName {
-				recordsCluster = ""
-				break
-			}
-		}
-
-		// {{{3 Get EC2 instances who's names match Config.Cluster.NamePrefix
-		ec2NextToken := aws.String("")
-
-		clusterInstances := []EC2Instance{}
-		for {
-			ec2DescInput := &ec2Svc.DescribeInstancesInput{
-				NextToken: ec2NextToken,
-			}
-
-			resp, err := ec2.DescribeInstances(ec2DescInput)
+			// {{{3 Get DNS entries
+			rawRecords, err := cf.DNSRecords(cfg.Cloudflare.ZoneID, cloudflare.DNSRecord{
+				Type: "CNAME",
+			})
 			if err != nil {
-				logger.Fatalf("failed to describe AWS EC2 instances: %s",
+				logger.Fatalf("failed to get Cloudflare DNS records: %s",
 					err.Error())
 			}
 
-			for _, reservation := range resp.Reservations {
-				// For each instance
-			INSTANCES_FOR:
-				for _, instance := range reservation.Instances {
-					// Ensure is running
-					// See state code documentation: https://docs.aws.amazon.com/sdk-for-go/api/service/ec2/#InstanceState
-					// state code 16 is running, anything past running
-					// we want to ignore
-					if *instance.State.Code > int64(16) {
-						continue
+			records := []CFDNSRecord{}
+		RECORDS_FOR:
+			for _, record := range rawRecords {
+				if !strings.Contains(record.Content, cfg.Cluster.NamePrefix) {
+					continue
+				}
+
+				for _, part := range strings.Split(record.Content, ".") {
+					if strings.HasPrefix(part, cfg.Cluster.NamePrefix) {
+						cfDNSRecord := CFDNSRecord{
+							ClusterName: part,
+							Record:      record,
+						}
+						records = append(records, cfDNSRecord)
+						logger.Debugf("found Cloudflare DNS record: %s", cfDNSRecord.String())
+
+						continue RECORDS_FOR
 					}
+				}
+			}
 
-					// For each tag
-					for _, tag := range instance.Tags {
-						// If name tag
-						if *tag.Key == "Name" {
-							// If name matches cluster prefix
-							if strings.HasPrefix(*tag.Value, cfg.Cluster.NamePrefix) {
-								ec2Instance := EC2Instance{
-									Name:      *tag.Value,
-									CreatedOn: *instance.LaunchTime,
+			// {{{3 Determine which cluster DNS records are currently pointing at
+			// recordsCluster is the name of the cluster which records point to.
+			// If this value is empty after the following for loop then the records
+			// are pointing to multiple clusters
+			recordsCluster := ""
+
+			for _, record := range records {
+				if recordsCluster == "" {
+					recordsCluster = record.ClusterName
+				} else if recordsCluster != record.ClusterName {
+					recordsCluster = ""
+					break
+				}
+			}
+
+			// {{{3 Get EC2 instances who's names match Config.Cluster.NamePrefix
+			ec2NextToken := aws.String("")
+
+			clusterInstances := []EC2Instance{}
+			for {
+				ec2DescInput := &ec2Svc.DescribeInstancesInput{
+					NextToken: ec2NextToken,
+				}
+
+				resp, err := ec2.DescribeInstances(ec2DescInput)
+				if err != nil {
+					logger.Fatalf("failed to describe AWS EC2 instances: %s",
+						err.Error())
+				}
+
+				for _, reservation := range resp.Reservations {
+					// For each instance
+				INSTANCES_FOR:
+					for _, instance := range reservation.Instances {
+						// Ensure is running
+						// See state code documentation: https://docs.aws.amazon.com/sdk-for-go/api/service/ec2/#InstanceState
+						// state code 16 is running, anything past running
+						// we want to ignore
+						if *instance.State.Code > int64(16) {
+							continue
+						}
+
+						// For each tag
+						for _, tag := range instance.Tags {
+							// If name tag
+							if *tag.Key == "Name" {
+								// If name matches cluster prefix
+								if strings.HasPrefix(*tag.Value, cfg.Cluster.NamePrefix) {
+									ec2Instance := EC2Instance{
+										Name:      *tag.Value,
+										CreatedOn: *instance.LaunchTime,
+									}
+									clusterInstances = append(clusterInstances, ec2Instance)
+
+									logger.Debugf("found AWS EC2 instance: %s", ec2Instance.String())
+									continue INSTANCES_FOR
 								}
-								clusterInstances = append(clusterInstances, ec2Instance)
-
-								logger.Debugf("found AWS EC2 instance: %s", ec2Instance.String())
-								continue INSTANCES_FOR
 							}
 						}
 					}
 				}
+
+				// Paginate if we need to
+				ec2NextToken = resp.NextToken
+				if ec2NextToken == nil {
+					break
+				}
 			}
 
-			// Paginate if we need to
-			ec2NextToken = resp.NextToken
-			if ec2NextToken == nil {
-				break
-			}
-		}
+			// {{{3 Group matching EC2 instances into clusters
+			for _, instance := range clusterInstances {
+				// {{{4 Get cluster name from instance name
+				parts := strings.Split(instance.Name, "-")
 
-		// {{{3 Group matching EC2 instances into clusters
-		for _, instance := range clusterInstances {
-			// {{{4 Get cluster name from instance name
-			parts := strings.Split(instance.Name, "-")
+				i := 0
+				clusterName := ""
 
-			i := 0
-			clusterName := ""
+				for !strings.HasPrefix(clusterName, cfg.Cluster.NamePrefix) && i < len(parts) {
+					clusterName = strings.Join(parts[:i], "-")
+					i += 1
+				}
 
-			for !strings.HasPrefix(clusterName, cfg.Cluster.NamePrefix) && i < len(parts) {
-				clusterName = strings.Join(parts[:i], "-")
-				i += 1
-			}
+				if !strings.HasPrefix(clusterName, cfg.Cluster.NamePrefix) {
+					logger.Fatalf("instance %s was selected as part of cluster but could not extract cluster name",
+						instance.Name)
+				}
 
-			if !strings.HasPrefix(clusterName, cfg.Cluster.NamePrefix) {
-				logger.Fatalf("instance %s was selected as part of cluster but could not extract cluster name",
-					instance.Name)
-			}
-
-			// {{{4 Create cluster
-			if _, ok := clusters[clusterName]; ok {
-				continue
-			}
-
-			clusters[clusterName] = Cluster{
-				Name:       clusterName,
-				Age:        time.Since(instance.CreatedOn),
-				DNSPointed: clusterName == recordsCluster,
-			}
-		}
-
-		for _, cluster := range clusters {
-			logger.Debugf("found cluster: %s", cluster.String())
-		}
-
-		// {{{2 Determine what must be done given existing state
-		logger.Debug("plan stage")
-
-		// {{{3 OpenShift install plan
-		osInstallPlan := OSInstallActionPlan{
-			Delete: []Cluster{},
-			Create: []Cluster{},
-		}
-
-		// youngClusters is a list of clusters which are less than
-		// Config.Cluster.OldestAge hours old
-		youngClusters := []Cluster{}
-
-		// primaryCluster is the cluster, existing or to be created, which
-		// will be used to host the site. This means developers will access this
-		// cluster via oc and end users will access this cluster via a domain.
-		var primaryCluster *Cluster = nil
-
-		// {{{4 Group clusters as old (older than cfg.Cluster.OldestAge) or young
-		for _, cluster := range clusters {
-			// Plan to delete old clusters
-			if cluster.Age.Hours() > cfg.Cluster.OldestAge {
-				osInstallPlan.Delete = append(osInstallPlan.Delete,
-					cluster)
-			} else {
-				youngClusters = append(youngClusters, cluster)
-			}
-		}
-
-		// {{{4 Figure out what to do with young clusters
-		if len(youngClusters) == 0 { // If no young clusters we have to create a new one
-			// {{{5 Get next cluster number
-			maxClusterNum := int64(0)
-
-			// {{{6 Find highest numeric value in openshift install data store path
-			dirs, err := ioutil.ReadDir(cfg.OpenShiftInstall.StateStorePath)
-			if err != nil {
-				logger.Fatalf("failed to read existing cluster credentials directory")
-			}
-
-			for _, dir := range dirs {
-				if !dir.IsDir() {
+				// {{{4 Create cluster
+				if _, ok := clusters[clusterName]; ok {
 					continue
 				}
 
-				if !strings.HasPrefix(dir.Name(), cfg.Cluster.NamePrefix) {
-					continue
-				}
-
-				numStr := strings.ReplaceAll(dir.Name(),
-					cfg.Cluster.NamePrefix, "")
-				num, err := strconv.ParseInt(numStr, 10, 64)
-				if err != nil {
-					logger.Fatalf("failed to parse cluster number for "+
-						"previous cluster credentials directory %s: %s",
-						dir.Name(), err.Error())
-				}
-
-				if num > maxClusterNum {
-					maxClusterNum = num
+				clusters[clusterName] = Cluster{
+					Name:       clusterName,
+					Age:        time.Since(instance.CreatedOn),
+					DNSPointed: clusterName == recordsCluster,
 				}
 			}
 
-			// {{{6 Add 1 to highest found numeric prefix
-			nextClusterNum := maxClusterNum + 1
-			nextClusterNumStr := fmt.Sprintf("%d", nextClusterNum)
-			if nextClusterNum < 10 {
-				nextClusterNumStr = fmt.Sprintf("0%s",
-					nextClusterNumStr)
+			for _, cluster := range clusters {
+				logger.Debugf("found cluster: %s", cluster.String())
 			}
 
-			// {{{5 Plan to create new cluster
-			c := Cluster{
-				Name: fmt.Sprintf("%s%s", cfg.Cluster.NamePrefix,
-					nextClusterNumStr),
+			// {{{2 Determine what must be done given existing state
+			logger.Debug("plan stage")
+
+			// {{{3 OpenShift install plan
+			osInstallPlan := OSInstallActionPlan{
+				Delete: []Cluster{},
+				Create: []Cluster{},
 			}
 
-			osInstallPlan.Create = []Cluster{c}
-			primaryCluster = &c
+			// youngClusters is a list of clusters which are less than
+			// Config.Cluster.OldestAge hours old
+			youngClusters := []Cluster{}
 
-		} else if len(youngClusters) > 1 { // More than 1 young clusters exist, delete all but the youngest
-			// {{{5 Find youngest cluster
-			youngestAge := float64(48)
-			youngestName := ""
+			// primaryCluster is the cluster, existing or to be created, which
+			// will be used to host the site. This means developers will access this
+			// cluster via oc and end users will access this cluster via a domain.
+			var primaryCluster *Cluster = nil
 
-			for _, cluster := range youngClusters {
-
-				if cluster.Age.Hours() < youngestAge {
-					youngestAge = cluster.Age.Hours()
-					youngestName = cluster.Name
-				}
-			}
-
-			// {{{5 Plan to delete all but youngest cluster
-			for _, cluster := range youngClusters {
-				if cluster.Name != youngestName {
+			// {{{4 Group clusters as old (older than cfg.Cluster.OldestAge) or young
+			for _, cluster := range clusters {
+				// Plan to delete old clusters
+				if cluster.Age.Hours() > cfg.Cluster.OldestAge {
 					osInstallPlan.Delete = append(osInstallPlan.Delete,
 						cluster)
 				} else {
-					primaryCluster = &cluster
+					youngClusters = append(youngClusters, cluster)
 				}
 			}
-		} else if len(youngClusters) == 1 { // If exactly 1 young cluster, keep
-			primaryCluster = &youngClusters[0]
-		}
 
-		if primaryCluster == nil {
-			logger.Fatal("failed to resolve primary cluster")
-		}
+			// {{{4 Figure out what to do with young clusters
+			if len(youngClusters) == 0 { // If no young clusters we have to create a new one
+				// {{{5 Get next cluster number
+				maxClusterNum := int64(0)
 
-		// {{{3 Cloudflare DNS plan
-		cfDNSPlan := CFDNSActionPlan{
-			Set: []CFDNSRecord{},
-		}
+				// {{{6 Find highest numeric value in openshift install data store path
+				dirs, err := ioutil.ReadDir(cfg.OpenShiftInstall.StateStorePath)
+				if err != nil {
+					logger.Fatalf("failed to read existing cluster credentials directory")
+				}
 
-		if !primaryCluster.DNSPointed {
-			// Point all records to primary cluster
-			for _, record := range records {
-				if record.ClusterName == primaryCluster.Name {
+				for _, dir := range dirs {
+					if !dir.IsDir() {
+						continue
+					}
+
+					if !strings.HasPrefix(dir.Name(), cfg.Cluster.NamePrefix) {
+						continue
+					}
+
+					numStr := strings.ReplaceAll(dir.Name(),
+						cfg.Cluster.NamePrefix, "")
+					num, err := strconv.ParseInt(numStr, 10, 64)
+					if err != nil {
+						logger.Fatalf("failed to parse cluster number for "+
+							"previous cluster credentials directory %s: %s",
+							dir.Name(), err.Error())
+					}
+
+					if num > maxClusterNum {
+						maxClusterNum = num
+					}
+				}
+
+				// {{{6 Add 1 to highest found numeric prefix
+				nextClusterNum := maxClusterNum + 1
+				nextClusterNumStr := fmt.Sprintf("%d", nextClusterNum)
+				if nextClusterNum < 10 {
+					nextClusterNumStr = fmt.Sprintf("0%s",
+						nextClusterNumStr)
+				}
+
+				// {{{5 Plan to create new cluster
+				c := Cluster{
+					Name: fmt.Sprintf("%s%s", cfg.Cluster.NamePrefix,
+						nextClusterNumStr),
+				}
+
+				osInstallPlan.Create = []Cluster{c}
+				primaryCluster = &c
+
+			} else if len(youngClusters) > 1 { // More than 1 young clusters exist, delete all but the youngest
+				// {{{5 Find youngest cluster
+				youngestAge := float64(48)
+				youngestName := ""
+
+				for _, cluster := range youngClusters {
+
+					if cluster.Age.Hours() < youngestAge {
+						youngestAge = cluster.Age.Hours()
+						youngestName = cluster.Name
+					}
+				}
+
+				// {{{5 Plan to delete all but youngest cluster
+				for _, cluster := range youngClusters {
+					if cluster.Name != youngestName {
+						osInstallPlan.Delete = append(osInstallPlan.Delete,
+							cluster)
+					} else {
+						primaryCluster = &cluster
+					}
+				}
+			} else if len(youngClusters) == 1 { // If exactly 1 young cluster, keep
+				primaryCluster = &youngClusters[0]
+			}
+
+			if primaryCluster == nil {
+				logger.Fatal("failed to resolve primary cluster")
+			}
+
+			// {{{3 Cloudflare DNS plan
+			cfDNSPlan := CFDNSActionPlan{
+				Set: []CFDNSRecord{},
+			}
+
+			if !primaryCluster.DNSPointed {
+				// Point all records to primary cluster
+				for _, record := range records {
+					if record.ClusterName == primaryCluster.Name {
+						continue
+					}
+
+					record.Record.Content = strings.ReplaceAll(record.Record.Content,
+						record.ClusterName, primaryCluster.Name)
+					cfDNSPlan.Set = append(cfDNSPlan.Set, record)
+				}
+			}
+
+			// {{{3 Cluster migrate plan
+			var migratePlan *MigrateActionPlan = nil
+
+			// If DNS pointed to a different cluster probably means primary cluster used to be
+			// a different.
+			if !flags.NoDNS && primaryCluster.Name != recordsCluster {
+				// If cluster DNS is pointing to exists, then migrate from
+				if _, ok := clusters[recordsCluster]; ok {
+					migratePlan = &MigrateActionPlan{
+						From: Cluster{
+							Name: recordsCluster,
+						},
+						To:        *primaryCluster,
+						Namespace: cfg.Cluster.Namespace,
+					}
+				}
+			}
+
+			// {{{3 Log plan
+			logger.Debugf("OpenShift install plan: %s", osInstallPlan)
+
+			logger.Debugf("Cloudflare DNS plan: %s", cfDNSPlan)
+
+			if migratePlan == nil {
+				logger.Debugf("migrate plan: none")
+			} else {
+				logger.Debugf("migrate plan: %s", *migratePlan)
+			}
+			logger.Debugf("primary cluster=%s", *primaryCluster)
+
+			// {{{3 Execute plans
+			logger.Debug("execute stage")
+			// {{{4 OpenShift install create
+			logger.Debugf("execute OpenShift install create")
+
+			for _, cluster := range osInstallPlan.Create {
+				// {{{5 Dry run
+				if flags.DryRun {
+					logger.Debugf("would exec %s -s %s -a create -n %s",
+						runOpenShiftInstallScript,
+						cfg.OpenShiftInstall.StateStorePath,
+						cluster.Name)
+					logger.Debug("would message Slack with new credentials")
 					continue
 				}
 
-				record.Record.Content = strings.ReplaceAll(record.Record.Content,
-					record.ClusterName, primaryCluster.Name)
-				cfDNSPlan.Set = append(cfDNSPlan.Set, record)
-			}
-		}
+				// {{{5 Create cluster
+				cmd := exec.Command(runOpenShiftInstallScript,
+					"-s", cfg.OpenShiftInstall.StateStorePath,
+					"-a", "create",
+					"-n", cluster.Name)
+				err := runCmd(logger.GetChild("openshift-install.create.stdout"),
+					logger.GetChild("openshift-install.create.stderr"), cmd)
+				if err != nil {
+					logger.Fatalf("failed to create cluster %s: %s",
+						cluster.Name, err.Error())
+				}
 
-		// {{{3 Cluster migrate plan
-		var migratePlan *MigrateActionPlan = nil
+				logger.Debugf("created cluster %s", cluster.Name)
 
-		// If DNS pointed to a different cluster probably means primary cluster used to be
-		// a different.
-		if !flags.NoDNS && primaryCluster.Name != recordsCluster {
-			// If cluster DNS is pointing to exists, then migrate from
-			if _, ok := clusters[recordsCluster]; ok {
-				migratePlan = &MigrateActionPlan{
-					From: Cluster{
-						Name: recordsCluster,
-					},
-					To:        *primaryCluster,
-					Namespace: cfg.Cluster.Namespace,
+				// {{{5 Post new credentials to Slack
+				// {{{6 Get kubeadmin user dashboard password
+				kubeadminPw, err := ioutil.ReadFile(filepath.Join(
+					cfg.OpenShiftInstall.StateStorePath,
+					cluster.Name, "auth", "kubeadmin-password"))
+				if err != nil {
+					logger.Fatalf("failed to open kubeadmin-password file for "+
+						"cluster %s: %s", err.Error())
+				}
+
+				// {{{6 Encode Slack message as JSON
+				buf := bytes.NewBuffer([]byte{})
+				encoder := json.NewEncoder(buf)
+				msg := map[string]string{
+					"text": fmt.Sprintf("*New temporary OpenShift 4.1 cluster*\n"+
+						"*URL*: `https://console-openshift-console.apps.%s.devcluster.openshift.com`\n"+
+						"*Username*: `kubeadmin`\n"+
+						"*Password*: `%s`",
+						cluster.Name, string(kubeadminPw)),
+				}
+				if err := encoder.Encode(msg); err != nil {
+					logger.Fatalf("failed to encode Slack message as JSON: %s",
+						err.Error())
+				}
+
+				// {{{6 Send to Slack
+				_, err = http.Post(cfg.Slack.IncomingWebhook, "application/json", buf)
+				if err != nil {
+					logger.Fatalf("failed to post Slack message for cluster %s: %s",
+						cluster.Name, err.Error())
 				}
 			}
-		}
 
-		// {{{3 Log plan
-		logger.Debugf("OpenShift install plan: %s", osInstallPlan)
+			// {{{4 Migrate
+			logger.Debugf("execute migrate")
+			if migratePlan != nil {
+				if flags.DryRun {
+					logger.Debugf("would exec %s -s %s -f %s -t %s -n %s",
+						migrateClusterScript,
+						cfg.OpenShiftInstall.StateStorePath,
+						migratePlan.From.Name,
+						migratePlan.To.Name,
+						cfg.Cluster.Namespace)
 
-		logger.Debugf("Cloudflare DNS plan: %s", cfDNSPlan)
+				} else {
+					cmd := exec.Command(migrateClusterScript,
+						"-s", cfg.OpenShiftInstall.StateStorePath,
+						"-f", migratePlan.From.Name,
+						"-t", migratePlan.To.Name,
+						"-n", migratePlan.Namespace)
+					err := runCmd(logger.GetChild("migrate-cluster.stdout"),
+						logger.GetChild("migrate-cluster.stderr"), cmd)
+					if err != nil {
+						logger.Fatalf("failed to migrate %s namespace from %s cluster to %s cluster",
+							migratePlan.Namespace, migratePlan.From.Name,
+							migratePlan.To.Name)
+					}
 
-		if migratePlan == nil {
-			logger.Debugf("migrate plan: none")
-		} else {
-			logger.Debugf("migrate plan: %s", *migratePlan)
-		}
-		logger.Debugf("primary cluster=%s", *primaryCluster)
-
-		// {{{3 Execute plans
-		logger.Debug("execute stage")
-		// {{{4 OpenShift install create
-		logger.Debugf("execute OpenShift install create")
-
-		for _, cluster := range osInstallPlan.Create {
-			// {{{5 Dry run
-			if flags.DryRun {
-				logger.Debugf("would exec %s -s %s -a create -n %s",
-					runOpenShiftInstallScript,
-					cfg.OpenShiftInstall.StateStorePath,
-					cluster.Name)
-				logger.Debug("would message Slack with new credentials")
-				continue
-			}
-
-			// {{{5 Create cluster
-			cmd := exec.Command(runOpenShiftInstallScript,
-				"-s", cfg.OpenShiftInstall.StateStorePath,
-				"-a", "create",
-				"-n", cluster.Name)
-			err := runCmd(logger.GetChild("openshift-install.create.stdout"),
-				logger.GetChild("openshift-install.create.stderr"), cmd)
-			if err != nil {
-				logger.Fatalf("failed to create cluster %s: %s",
-					cluster.Name, err.Error())
-			}
-
-			logger.Debugf("created cluster %s", cluster.Name)
-
-			// {{{5 Post new credentials to Slack
-			// {{{6 Get kubeadmin user dashboard password
-			kubeadminPw, err := ioutil.ReadFile(filepath.Join(
-				cfg.OpenShiftInstall.StateStorePath,
-				cluster.Name, "auth", "kubeadmin-password"))
-			if err != nil {
-				logger.Fatalf("failed to open kubeadmin-password file for "+
-					"cluster %s: %s", err.Error())
-			}
-
-			// {{{6 Encode Slack message as JSON
-			buf := bytes.NewBuffer([]byte{})
-			encoder := json.NewEncoder(buf)
-			msg := map[string]string{
-				"text": fmt.Sprintf("*New temporary OpenShift 4.1 cluster*\n"+
-					"*URL*: `https://console-openshift-console.apps.%s.devcluster.openshift.com`\n"+
-					"*Username*: `kubeadmin`\n"+
-					"*Password*: `%s`",
-					cluster.Name, string(kubeadminPw)),
-			}
-			if err := encoder.Encode(msg); err != nil {
-				logger.Fatalf("failed to encode Slack message as JSON: %s",
-					err.Error())
-			}
-
-			// {{{6 Send to Slack
-			_, err = http.Post(cfg.Slack.IncomingWebhook, "application/json", buf)
-			if err != nil {
-				logger.Fatalf("failed to post Slack message for cluster %s: %s",
-					cluster.Name, err.Error())
-			}
-		}
-
-		// {{{4 Migrate
-		logger.Debugf("execute migrate")
-		if migratePlan != nil {
-			if flags.DryRun {
-				logger.Debugf("would exec %s -s %s -f %s -t %s -n %s",
-					migrateClusterScript,
-					cfg.OpenShiftInstall.StateStorePath,
-					migratePlan.From.Name,
-					migratePlan.To.Name,
-					cfg.Cluster.Namespace)
-
-			} else {
-				cmd := exec.Command(migrateClusterScript,
-					"-s", cfg.OpenShiftInstall.StateStorePath,
-					"-f", migratePlan.From.Name,
-					"-t", migratePlan.To.Name,
-					"-n", migratePlan.Namespace)
-				err := runCmd(logger.GetChild("migrate-cluster.stdout"),
-					logger.GetChild("migrate-cluster.stderr"), cmd)
-				if err != nil {
-					logger.Fatalf("failed to migrate %s namespace from %s cluster to %s cluster",
+					logger.Debugf("migrated %s namespace from %s cluster to %s cluster",
 						migratePlan.Namespace, migratePlan.From.Name,
 						migratePlan.To.Name)
 				}
-
-				logger.Debugf("migrated %s namespace from %s cluster to %s cluster",
-					migratePlan.Namespace, migratePlan.From.Name,
-					migratePlan.To.Name)
 			}
-		}
 
-		// {{{4 CloudflareDNS
-		logger.Debug("execute Cloudflare DNS set")
-		for _, record := range cfDNSPlan.Set {
-			if flags.DryRun {
-				logger.Debugf("would set Cloudflare DNS record %s=%s",
+			// {{{4 CloudflareDNS
+			logger.Debug("execute Cloudflare DNS set")
+			for _, record := range cfDNSPlan.Set {
+				if flags.DryRun {
+					logger.Debugf("would set Cloudflare DNS record %s=%s",
+						record.Record.Name, record.Record.Content)
+					continue
+				}
+
+				err := cf.UpdateDNSRecord(cfg.Cloudflare.ZoneID, record.Record.ID,
+					record.Record)
+				if err != nil {
+					logger.Fatalf("failed to update Cloudflare DNS record %s: %s",
+						record.Record.Name, err.Error())
+				}
+
+				logger.Debugf("updated Cloudflare DNS record.Name=%s to record.Content=%s",
 					record.Record.Name, record.Record.Content)
-				continue
 			}
 
-			err := cf.UpdateDNSRecord(cfg.Cloudflare.ZoneID, record.Record.ID,
-				record.Record)
-			if err != nil {
-				logger.Fatalf("failed to update Cloudflare DNS record %s: %s",
-					record.Record.Name, err.Error())
+			// {{{4 OpenShift install delete
+			logger.Debugf("execute OpenShift install delete")
+			for _, cluster := range osInstallPlan.Delete {
+				// {{{5 Dry run
+				if flags.DryRun {
+					logger.Debugf("would exec %s -s %s -a delete -n %s",
+						runOpenShiftInstallScript,
+						cfg.OpenShiftInstall.StateStorePath,
+						cluster.Name)
+					continue
+				}
+
+				// {{{5 Delete
+				cmd := exec.Command(runOpenShiftInstallScript,
+					"-s", cfg.OpenShiftInstall.StateStorePath,
+					"-a", "delete",
+					"-n", cluster.Name)
+				err := runCmd(logger.GetChild("openshift-install.delete.stdout"),
+					logger.GetChild("openshift-install.delete.stderr"), cmd)
+				if err != nil {
+					logger.Fatalf("failed to delete cluster %s: %s",
+						cluster.Name, err.Error())
+				}
+
+				logger.Debugf("delete cluster %s", cluster.Name)
 			}
 
-			logger.Debugf("updated Cloudflare DNS record.Name=%s to record.Content=%s",
-				record.Record.Name, record.Record.Content)
-		}
-
-		// {{{4 OpenShift install delete
-		logger.Debugf("execute OpenShift install delete")
-		for _, cluster := range osInstallPlan.Delete {
-			// {{{5 Dry run
-			if flags.DryRun {
-				logger.Debugf("would exec %s -s %s -a delete -n %s",
-					runOpenShiftInstallScript,
-					cfg.OpenShiftInstall.StateStorePath,
-					cluster.Name)
-				continue
+			// {{{2 Determine when to run next control loop
+			if flags.Once {
+				logger.Info("ran control loop once, exiting")
+				os.Exit(0)
+			} else {
+				logger.Info("ran control loop, sleeping 15m before next iteration")
+				ctrlLoopTimer.Reset(time.Minute * 15)
 			}
-
-			// {{{5 Delete
-			cmd := exec.Command(runOpenShiftInstallScript,
-				"-s", cfg.OpenShiftInstall.StateStorePath,
-				"-a", "delete",
-				"-n", cluster.Name)
-			err := runCmd(logger.GetChild("openshift-install.delete.stdout"),
-				logger.GetChild("openshift-install.delete.stderr"), cmd)
-			if err != nil {
-				logger.Fatalf("failed to delete cluster %s: %s",
-					cluster.Name, err.Error())
-			}
-
-			logger.Debugf("delete cluster %s", cluster.Name)
-		}
-
-		// {{{2 Determine when to run next control loop
-		if flags.Once {
-			logger.Info("ran control loop once, exiting")
-			os.Exit(0)
-		} else {
-			logger.Info("ran control loop, sleeping 15m before next iteration")
-			time.Sleep(15 * time.Minute)
+			break
 		}
 	}
 }

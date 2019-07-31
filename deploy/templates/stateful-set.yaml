@@ -22,6 +22,7 @@ spec:
         config-{{ $path | base }}-sha256sum: {{ tpl ($.Files.Get $path) $ | sha256sum }}
         {{- end }}
     spec:
+      terminationGracePeriodSeconds: 3600 # 1 hour
       volumes:
         - name: config
           configMap:
