@@ -1,0 +1,51 @@
+apiVersion: v1/apps
+kind: StatefulSet
+metadata:
+  name: {{ include "auto-cluster.resource-name" . }}
+  labels:
+    component: app
+{{ include "auto-cluster.resource-labels" . | indent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+{{ include "auto-cluster.resource-labels" . | indent 6 }}
+  serviceName: {{ include "auto-cluster.resource-name" . }}
+  template:
+    metadata:
+      name: {{ include "auto-cluster.resource-name" . }}
+      labels:
+        component: app
+{{ include "auto-cluster.resource-labels" . | indent 8 }}
+      annotations:
+        {{- range $path, $_ := .Files.Glob "config/*" }}
+        config-{{ $path | base }}-sha256sum: {{ tpl ($.Files.Get $path) $ | sha256sum }}
+        {{- end }}
+    spec:
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "auto-cluster.resource-name" . }}-config
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ include "auto-cluster.resource-name" . }}-data
+      containers:
+        - name: app
+          image: {{ .Values.image.repo }}:{{ .Values.image.tag }}
+          env:
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "auto-cluster.resource-name" . }}-creds
+                  key: awsAccessKeyID
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "auto-cluster.resource-name" . }}-creds
+                  key: awsSecretAccessKey
+          volumeMounts:
+            - name: config
+              mountPath: /etc/auto-cluster
+            - name: data
+              mountPath: /mnt/data
+          
