@@ -1,6 +1,6 @@
 FROM alpine:latest
 
-RUN apk add musl-dev go git
+RUN apk add musl-dev go git bash
 
 RUN adduser -D autocluster # -D = no password
 
