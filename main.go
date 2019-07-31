@@ -262,15 +262,18 @@ func main() {
 	}
 
 	// {{{3 run-openshift-install.sh script
-	runOpenShiftInstallScript := filepath.Join(cwd, "run-openshift-install.sh")
+	runOpenShiftInstallScript := filepath.Join(cwd,
+		"scripts/run-openshift-install.sh")
 	if _, err := os.Stat(runOpenShiftInstallScript); err != nil {
-		logger.Fatalf("failed to stat run-openshift-install.sh: %s", err.Error())
+		logger.Fatalf("failed to stat scripts/run-openshift-install.sh: %s",
+			err.Error())
 	}
 
 	// {{{3 migrate-cluster.sh script
-	migrateClusterScript := filepath.Join(cwd, "migrate-cluster.sh")
+	migrateClusterScript := filepath.Join(cwd, "scripts/migrate-cluster.sh")
 	if _, err := os.Stat(migrateClusterScript); err != nil {
-		logger.Fatalf("failed to stat migrate-cluster.sh: %s", err.Error())
+		logger.Fatalf("failed to stat scripts/migrate-cluster.sh: %s",
+			err.Error())
 	}
 
 	// {{{1 API setup

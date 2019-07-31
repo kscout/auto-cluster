@@ -29,6 +29,9 @@ spec:
         - name: data
           persistentVolumeClaim:
             claimName: {{ include "auto-cluster.resource-name" . }}-data
+        - name: creds
+          secret:
+            secretName: {{ include "auto-cluster.resource-name" . }}-creds
       containers:
         - name: app
           image: {{ .Values.image.repo }}:{{ .Values.image.tag }}
@@ -43,9 +46,12 @@ spec:
                 secretKeyRef:
                   name: {{ include "auto-cluster.resource-name" . }}-creds
                   key: awsSecretAccessKey
+            - name: AUTO_CLUSTER_PULL_SECRET_PATH
+              value: /mnt/creds/openshiftPullSecret
           volumeMounts:
             - name: config
               mountPath: /etc/auto-cluster
             - name: data
               mountPath: /mnt/data
-          
+            - name: creds
+              mountPath: /mnt/creds

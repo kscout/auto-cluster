@@ -1,13 +1,15 @@
 .PHONY: deploy rm-deploy \
-	docker docker-build docker-push
+	container container-build container-push
 
 MAKE ?= make
 
 ORG ?= kscout
 APP ?= auto-cluster
 
-DOCKER_VERSION ?= ${ENV}-latest
-DOCKER_TAG ?= ${ORG}/${APP}:${DOCKER_VERSION}
+CONTAINER_BIN ?= podman
+
+CONTAINER_VERSION ?= ${ENV}-latest
+CONTAINER_TAG ?= quay.io/${ORG}/${APP}:${CONTAINER_VERSION}
 
 KUBE_LABELS ?= app=${APP},env=${ENV}
 KUBE_TYPES ?= $(shell grep -h -r kind deploy/charts | awk '{ print $2 }' | uniq | paste -sd "," -)
@@ -21,6 +23,7 @@ deploy:
 		--values deploy/values.secrets.${ENV}.yaml \
 		--set global.env=${ENV} \
 		--set global.app=${APP} \
+		--set image.tag=${CONTAINER_VERSION} \
 		${SET_ARGS} deploy \
 	| ${KUBE_APPLY}
 
@@ -37,18 +40,17 @@ rm-deploy:
 		-o yaml \
 	| oc delete -f -
 
-# build and push docker image
-docker:
-	@if [ -eq "$LOGIN" "true" ]; then echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin &> /dev/null
-	${MAKE} docker-build
-	${MAKE} docker-push
+# build and push container image
+container:
+	${MAKE} container-build
+	${MAKE} container-push
 
-# build docker image
-docker-build:
+# build container image
+container-build:
 	@if [ -z "${ENV}" ]; then echo "ENV must be set"; exit 1; fi
-	docker build -t ${DOCKER_TAG} .
+	${CONTAINER_BIN} build -t ${CONTAINER_TAG} .
 
-# push docker image
-docker-push:
+# push container image
+container-push:
 	@if [ -z "${ENV}" ]; then echo "ENV must be set"; exit 1; fi
-	docker push ${DOCKER_TAG}
+	${CONTAINER_BIN} push ${CONTAINER_TAG}

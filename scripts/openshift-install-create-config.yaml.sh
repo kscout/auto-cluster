@@ -13,6 +13,12 @@
 #
 #    Expects a pull-secret file to be adjacent to the script.
 #
+# CONFIGURATION
+#
+#    Environment variables are used to configure the script:
+#
+#    AUTO_CLUSTER_PULL_SECRET_PATH    Path to pull-secret file
+#
 #?
 
 function die() {
@@ -24,8 +30,12 @@ if [ -z "$1" ]; then
     die "CLUSTER_NAME argument required"
 fi
 
-if [ ! -f ./pull-secret ]; then
-    die "pull-secret file must be adjacent to the script"
+if [ -z "$AUTO_CLUSTER_PULL_SECRET_PATH" ]; then
+    AUTO_CLUSTER_PULL_SECRET_PATH=$(realpath ./pull-secret)
+fi
+
+if [ ! -f "$AUTO_CLUSTER_PULL_SECRET_PATH" ]; then
+    die "$AUTO_CLUSTER_PULL_SECRET_PATH file not found"
 fi
 
 cat <<EOF
@@ -55,5 +65,5 @@ networking:
 platform:
   aws:
     region: us-east-1
-pullSecret: '$(cat ./pull-secret)'
+pullSecret: '$(cat $AUTO_CLUSTER_PULL_SECRET_PATH)'
 EOF
