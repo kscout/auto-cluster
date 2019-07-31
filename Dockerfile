@@ -14,7 +14,7 @@ COPY --chown=autocluster:autocluster go.mod go.sum /home/autocluster/
 
 RUN go mod download
 
-COPY --chown=autocluster:autocluster main.go /home/autocluster/
+COPY --chown=autocluster:autocluster . /home/autocluster/
 RUN go build -o auto-cluster .
 
 CMD /home/autocluster/auto-cluster
