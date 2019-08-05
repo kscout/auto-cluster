@@ -115,6 +115,16 @@ case "$cmd" in
 	   fi
 
 	   xdg-open "https://console-openshift-console.apps.$cluster_name.devcluster.openshift.com"
+
+	   echo "Username: kubeadmin"
+	   printf "Password: $(cat $auto_cluster_host_data_dir/$cluster_name/auth/kubeadmin-password)"
+
+	   if which xclip &> /dev/null; then
+		  cat $auto_cluster_host_data_dir/$cluster_name/auth/kubeadmin-password | xclip -selection clipboard
+		  printf " (copied to clipboard)\n"
+	   else
+		  printf "\n"
+	   fi
 	   ;;
     *) die "Unknown command $cmd" ;;
 esac
