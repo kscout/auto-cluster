@@ -1,0 +1,102 @@
+#!/usr/bin/env bash
+#?
+# auto-cluster-auth - A CLI to authenticate with auto-cluster managed clusters
+#
+# Run with -h option for help text.
+#?
+
+# Helpers
+function die() {
+    echo "Error: $@" >&2
+    exit 1
+}
+
+# Options
+auto_cluster_env=prod
+auto_cluster_ns=kscout
+
+while getopts "he:n:" opt; do
+    case "$opt" in
+	   h)
+		  progname=auto-cluster-auth
+		  cat <<EOF
+$progname - A CLI to authenticate with auto-cluster managed clusters
+Usage: $progname [-h,-e ENV] CMD ...
+
+Options:
+-h        Show help text
+-e ENV    Environment auto-cluster is running in, defaults to "prod"
+-n NS     Namespace auto-cluster is running in, defaults to "kscout"
+
+Arguments:
+CMD    Command to run, see Commands section.
+
+Commands:
+sync    Sync clusters down from running auto-cluster instance
+ls      List available clusters
+env     Output shell interpretable string setting KUBECONFIG env var.
+        Pass a cluster name as the second positional argument.
+EOF
+		  exit 1
+		  ;;
+	   e) auto_cluster_env="$OPTARG" ;;
+	   n) auto_cluster_ns="$OPTARG" ;;
+	   ?) die "Unknown option" ;;
+    esac
+done
+
+shift $((OPTIND-1))
+
+# Configuration
+prog_dir=$(realpath $(dirname "$0"))
+
+auto_cluster_pod_data_dir=/mnt/data
+auto_cluster_host_data_dir="$prog_dir/.$auto_cluster_env.livekubeconfig"
+
+# Arguments
+cmd="$1"
+if [ -z "$cmd" ]; then
+    die "CMD arugment required"
+fi
+
+case "$cmd" in
+    sync)	   
+	   if ! oc cp "$auto_cluster_ns/$auto_cluster_env-auto-cluster-0":/mnt/data "$auto_cluster_host_data_dir"; then
+		  die "Failed to copy kube configs from $auto_cluster_env auto-cluster running in the $auto_cluster_ns namespace"
+	   fi
+	   ;;
+    ls)
+	   if [ ! -d "$auto_cluster_host_data_dir" ]; then
+		  die "No data, run sync command first"
+	   fi
+	   
+	   for cluster_name in $(ls "$auto_cluster_host_data_dir"); do
+		  if [ ! -f "$auto_cluster_host_data_dir/$cluster_name/auth/kubeconfig" ]; then
+			 continue
+		  fi
+
+		  echo "$cluster_name"
+	   done
+	   ;;
+    env)
+	   cluster_name="$2"
+	   if [ -z "$cluster_name" ]; then
+		  die "CLUSTER_NAME argument required"
+	   fi
+
+	   if [ ! -d "$auto_cluster_host_data_dir" ]; then
+		  die "No data, run sync command first"
+	   fi
+
+	   if [ ! -d "$auto_cluster_host_data_dir/$cluster_name" ]; then
+		  die "$cluster_name cluster does not exist"
+	   fi
+
+	   if [ ! -f "$auto_cluster_host_data_dir/$cluster_name/auth/kubeconfig" ]; then
+		  die "no kubeconfig found for $cluster_name cluster"
+	   fi
+
+	   echo "export KUBECONFIG=$auto_cluster_host_data_dir/$cluster_name/auth/kubeconfig"
+	   ;;
+    *) die "Unknown command $cmd" ;;
+esac
