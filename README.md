@@ -5,43 +5,24 @@ its 48 hour lifespan.
 # Table Of Contents
 - [Overview](#overview)
 - [Run](#run)
+- [Access Clusters](#access-clusters)
 - [Container](#container)
 
 # Overview
-The [kscout.io](https://kscout.io) site is currently hosted on temporary 
-OpenShift 4.1 development clusters. These clusters are automatically deleted 
-after 48 hours. As a result a new cluster must be created every 2 days. New 
-resources must be deployed to this cluster and the Cloudflare DNS zone for
-kscout.io must be updated to point to the new cluster. Additionally team members
-must be informed of the new cluster's details so they can update their 
-local toolchains.
-
-The auto cluster tool automates this entire process.  
-
-It acts similar to a Kubernetes controller, comparing the current and desired 
-states and planning how to reconcile differences.
-
-The auto cluster tool will run its control loop every 15 minutes. During each
-iteration it will ensure that there are no clusters which are getting too
-close to their automated deletion date. If any clusters are in danger of being 
-deleted the following steps are taken:
+Ensures no clusters which are getting too old. If any clusters are in danger 
+of being deleted the following steps are taken:
 
 - Provision new cluster with the 
   [OpenShift installer tool](https://github.com/openshift/installer)
 - Post new cluster credentials to the Slack
-- Migrate resources from the old development cluster to the new
-  development cluster
+- Install Helm chart on new cluster
 - Point DNS to new cluster
-- Delete old development cluster
 
 This tool is tailored for the use case of the KScout team. As such, several 
 assumptions are made:
 
 - DNS hosted on Cloudflare
 - All applications deployed in the same namespace
-- Subset of Kuberntes resources used
-  - See the [`migrate_types` variable in 
-	`migrate-cluster.sh`](migrate-cluster.sh#L21) for the list of resource types
 
 # Run
 ## AWS Credentials
@@ -84,6 +65,10 @@ StateStorePath = "PATH TO A DIRECTORY WHICH SCRIPT CAN WRITE TO"
 [Slack]
 # Slack incoming web hook used to post new cluster credentials
 IncomingWebhook = "https://hooks.slack.com/services/SECRET_SLACK_INFO
+
+[Helm]
+# Git URI of repository holding Helm chart to install on new clusters
+Chart = "CHART GIT URI"
 ```
 
 Posting the new cluster credentials to Slack requires that you have an incoming
@@ -104,8 +89,6 @@ go run . -once
 ```
 
 ## Continuous Invocation
-*Unstable, wouldn't recommend*  
-
 To run every 15 minutes:
 
 ```
@@ -119,8 +102,31 @@ To run the tool and ensure that no DNS changes will be made:
 go run . -no-dns
 ```
 
+# Access Clusters
+The `auth-cluster-auth` script helps provide access to temporary clusters 
+created by the auto cluster tool.
+
+First sync credentials down from the auto cluster instance:
+
+```
+./auto-cluster-auth [-n NS,-e ENV] sync
+```
+
+Then list available clusters:
+
+```
+./auto-cluster-auth [-n NS,-e ENV] ls
+```
+
+Finally get the copy the output of the following command and run it in 
+your terminal:
+
+```
+./auto-cluster-auth [-n NS,-e ENV] env CLUSTER_NAME
+```
+
 # Container
-The `docker.io/kscout/auto-cluster:latest` Docker image is available for use:
+The `quay.io/kscout/auto-cluster:latest` Docker image is available for use:
 
 ```
 docker run \
@@ -136,5 +142,5 @@ docker run \
 Build and push:
 
 ```
-make docker
+make container
 ```
