@@ -16,7 +16,8 @@ RUN rm oc.tar.gz
 
 RUN curl 'https://get.helm.sh/helm-v2.14.3-linux-amd64.tar.gz' > helm.tar.gz
 RUN tar -xzf helm.tar.gz
-RUN mv helm /usr/bin/
+RUN mv linux-amd64/helm /usr/bin/
+RUN rm -rf linux-amd64/
 RUN rm helm.tar.gz
 
 RUN adduser -D autocluster # -D = no password
