@@ -122,7 +122,13 @@ Finally get the copy the output of the following command and run it in
 your terminal:
 
 ```
-./auto-cluster-auth [-n NS,-e ENV] env CLUSTER_NAME
+./auto-cluster-auth [-n NS,-e ENV] env [CLUSTER_NAME]
+```
+
+To open the cluster's dashboard run:
+
+```
+./auto-cluster-auth [-n NS,-e ENV] browse [CLUSTER_NAME]
 ```
 
 # Container

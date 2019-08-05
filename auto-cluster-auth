@@ -32,11 +32,14 @@ Arguments:
 CMD    Command to run, see Commands section.
 
 Commands:
-sync    Sync clusters down from running auto-cluster instance
-ls      List available clusters
-env     Output shell interpretable string setting KUBECONFIG env var.
-        Pass a cluster name as the second positional argument. If second
-        argument not provided, defaults to the cluster with the highest number.
+sync      Sync clusters down from running auto-cluster instance
+ls        List available clusters
+env       Output shell interpretable string setting KUBECONFIG env var.
+          Pass a cluster name as the second positional argument. If second
+          argument not provided defaults to the cluster with the highest number.
+browse    Open cluster console in browser. Pass a cluster name as the second 
+          positional argument. If second argument not provided defaults to the
+          cluster with the highest number.
 EOF
 		  exit 1
 		  ;;
@@ -101,6 +104,17 @@ case "$cmd" in
 	   fi
 
 	   echo "export KUBECONFIG=$auto_cluster_host_data_dir/$cluster_name/auth/kubeconfig"
+	   ;;
+    browse)
+	   cluster_name="$2"
+	   if [ -z "$cluster_name" ]; then
+		  cluster_name=$("$0" ls | sort -n | tail -1)
+		  if [ -z "$cluster_name" ]; then
+			 die "Failed to default CLUSTER_NAME argument to newest cluster"
+		  fi
+	   fi
+
+	   xdg-open "https://console-openshift-console.apps.$cluster_name.devcluster.openshift.com"
 	   ;;
     *) die "Unknown command $cmd" ;;
 esac
