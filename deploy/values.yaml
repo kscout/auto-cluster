@@ -20,3 +20,5 @@ autoCluster:
     Namespace: '"kscout"'
   OpenShiftInstall:
     StateStorePath: '"/mnt/data"'
+  Helm:
+    Chart: '"https://github.com/kscout/monochart.git"'

@@ -65,6 +65,12 @@ type Config struct {
 		// IncomingWebhook is a Slack API incoming webhook to a channel where the new cluster's credentials will be placed
 		IncomingWebhook string `validate:"required"`
 	} `validate:"required"`
+
+	// Helm configures a Helm chart to be installed on new clusters
+	Helm struct {
+		// Chart is the URI of a Git repository which holds the chart to install in its root directory
+		Chart string `validate:"required"`
+	}
 }
 
 // Flags provided by command line invocation
@@ -129,8 +135,8 @@ func (r CFDNSRecord) String() string {
 		r.ClusterName, r.Record.Name, r.Record.ID, r.Record.Content)
 }
 
-// OSInstallActionPlan is a plan of actions for the openshift-install tool
-type OSInstallActionPlan struct {
+// OSInstallPlan is a plan of actions for the openshift-install tool
+type OSInstallPlan struct {
 	// Create clusters. The Cluster.Name field is the only value used.
 	Create []Cluster
 
@@ -138,8 +144,8 @@ type OSInstallActionPlan struct {
 	Delete []Cluster
 }
 
-// String representation of OSInstallActionPlan
-func (p OSInstallActionPlan) String() string {
+// String representation of OSInstallPlan
+func (p OSInstallPlan) String() string {
 	createNames := []string{}
 	for _, cluster := range p.Create {
 		createNames = append(createNames, cluster.Name)
@@ -155,15 +161,15 @@ func (p OSInstallActionPlan) String() string {
 		strings.Join(deleteNames, ","))
 }
 
-// CFDNSActionPlan is a plan of actions for Cloudflare DNS
-type CFDNSActionPlan struct {
+// CFDNSPlan is a plan of actions for Cloudflare DNS
+type CFDNSPlan struct {
 	// Set DNS records. The CFDNSRecord.Record.Content and
 	// CFDNSRecord.Record.ID fields are the only values used.
 	Set []CFDNSRecord
 }
 
-// String representation of CFDNSActionPlan
-func (p CFDNSActionPlan) String() string {
+// String representation of CFDNSPlan
+func (p CFDNSPlan) String() string {
 	setStrs := []string{}
 
 	for _, record := range p.Set {
@@ -173,22 +179,22 @@ func (p CFDNSActionPlan) String() string {
 	return fmt.Sprintf("Set=[%s]", strings.Join(setStrs, ", "))
 }
 
-// MigrateActionPlan is a plan to migrate resources from one OpenShift cluster to another
-type MigrateActionPlan struct {
-	// From cluster, Cluster.Name field is the only value used.
-	From Cluster
+// HelmInstallPlan is a plan to install a Helm chart on a Kubernetes cluster
+type HelmInstallPlan struct {
+	// ChartGitURI is the location of a Git repo holding the Helm chart to install
+	ChartGitURI string
 
-	// To cluster, Cluster.Name field is the only value used.
-	To Cluster
+	// Cluster to install Helm chart on, only .Name field is used
+	Cluster Cluster
 
-	// Namespace to migrate
+	// Namespace to install Helm chart in
 	Namespace string
 }
 
-// String representation of MigrateActionPlan
-func (p MigrateActionPlan) String() string {
-	return fmt.Sprintf("From.Name=%s, To.Name=%s, Namespace=%s",
-		p.From.Name, p.To.Name, p.Namespace)
+// String returns a human readable representation of a Helm install plan
+func (p HelmInstallPlan) String() string {
+	return fmt.Sprintf("chart=%s, cluster=%s, namespace=%s", p.ChartGitURI, p.Cluster.Name,
+		p.Namespace)
 }
 
 // runCmd runs a command as a subprocess, handles printing out stdout and stderr
@@ -284,9 +290,9 @@ func main() {
 			err.Error())
 	}
 
-	// {{{3 migrate-cluster.sh script
-	migrateClusterScript := filepath.Join(cwd, "scripts/migrate-cluster.sh")
-	if _, err := os.Stat(migrateClusterScript); err != nil {
+	// {{{3 install-helm-chart.sh
+	installHelmChartScript := filepath.Join(cwd, "scripts/install-helm-chart.sh")
+	if _, err := os.Stat(installHelmChartScript); err != nil {
 		logger.Fatalf("failed to stat scripts/migrate-cluster.sh: %s",
 			err.Error())
 	}
@@ -465,7 +471,7 @@ func main() {
 			logger.Debug("plan stage")
 
 			// {{{3 OpenShift install plan
-			osInstallPlan := OSInstallActionPlan{
+			osInstallPlan := OSInstallPlan{
 				Delete: []Cluster{},
 				Create: []Cluster{},
 			}
@@ -572,7 +578,7 @@ func main() {
 			}
 
 			// {{{3 Cloudflare DNS plan
-			cfDNSPlan := CFDNSActionPlan{
+			cfDNSPlan := CFDNSPlan{
 				Set: []CFDNSRecord{},
 			}
 
@@ -589,20 +595,20 @@ func main() {
 				}
 			}
 
-			// {{{3 Cluster migrate plan
-			var migratePlan *MigrateActionPlan = nil
+			// {{{3 Helm install plan
+			var helmPlan *HelmInstallPlan = nil
 
 			// If DNS pointed to a different cluster probably means primary cluster used to be
 			// a different.
-			if !flags.NoDNS && primaryCluster.Name != recordsCluster {
+			if primaryCluster.Name != recordsCluster && len(cfg.Helm.Chart) > 0 {
 				// If cluster DNS is pointing to exists, then migrate from
 				if _, ok := clusters[recordsCluster]; ok {
-					migratePlan = &MigrateActionPlan{
-						From: Cluster{
+					helmPlan = &HelmInstallPlan{
+						Cluster: Cluster{
 							Name: recordsCluster,
 						},
-						To:        *primaryCluster,
-						Namespace: cfg.Cluster.Namespace,
+						ChartGitURI: cfg.Helm.Chart,
+						Namespace:   cfg.Cluster.Namespace,
 					}
 				}
 			}
@@ -612,10 +618,10 @@ func main() {
 
 			logger.Debugf("Cloudflare DNS plan: %s", cfDNSPlan)
 
-			if migratePlan == nil {
-				logger.Debugf("migrate plan: none")
+			if helmPlan == nil {
+				logger.Debugf("helm plan: none")
 			} else {
-				logger.Debugf("migrate plan: %s", *migratePlan)
+				logger.Debugf("helm plan: %s", *helmPlan)
 			}
 			logger.Debugf("primary cluster=%s", *primaryCluster)
 
@@ -682,34 +688,32 @@ func main() {
 				}
 			}
 
-			// {{{4 Migrate
-			logger.Debugf("execute migrate")
-			if migratePlan != nil {
+			// {{{4 Helm chart install
+			logger.Debugf("execute Helm chart install")
+			if helmPlan != nil {
 				if flags.DryRun {
-					logger.Debugf("would exec %s -s %s -f %s -t %s -n %s",
-						migrateClusterScript,
+					logger.Debugf("would exec %s -s %s -c %s -n %s %s",
+						installHelmChartScript,
 						cfg.OpenShiftInstall.StateStorePath,
-						migratePlan.From.Name,
-						migratePlan.To.Name,
-						cfg.Cluster.Namespace)
+						helmPlan.Cluster.Name,
+						helmPlan.Namespace,
+						helmPlan.ChartGitURI)
 
 				} else {
-					cmd := exec.Command(migrateClusterScript,
+					cmd := exec.Command(installHelmChartScript,
 						"-s", cfg.OpenShiftInstall.StateStorePath,
-						"-f", migratePlan.From.Name,
-						"-t", migratePlan.To.Name,
-						"-n", migratePlan.Namespace)
-					err := runCmd(logger.GetChild("migrate-cluster.stdout"),
-						logger.GetChild("migrate-cluster.stderr"), cmd)
+						"-c", helmPlan.Cluster.Name,
+						"-n", helmPlan.Namespace,
+						helmPlan.ChartGitURI)
+					err := runCmd(logger.GetChild("helm-install.stdout"),
+						logger.GetChild("helm-install.stderr"), cmd)
 					if err != nil {
-						logger.Fatalf("failed to migrate %s namespace from %s cluster to %s cluster",
-							migratePlan.Namespace, migratePlan.From.Name,
-							migratePlan.To.Name)
+						logger.Fatalf("failed to install Helm chart \"%s\" in the \"%s\" namespace on the \"%s\" cluster",
+							helmPlan.ChartGitURI, helmPlan.Namespace, helmPlan.Cluster.Name)
 					}
 
-					logger.Debugf("migrated %s namespace from %s cluster to %s cluster",
-						migratePlan.Namespace, migratePlan.From.Name,
-						migratePlan.To.Name)
+					logger.Debugf("installed Helm chart \"%s\" in the \"%s\" namespace on the \"%s\" cluster",
+						helmPlan.ChartGitURI, helmPlan.Namespace, helmPlan.Cluster.Name)
 				}
 			}
 
