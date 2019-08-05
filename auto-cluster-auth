@@ -114,8 +114,18 @@ case "$cmd" in
 		  fi
 	   fi
 
-	   xdg-open "https://console-openshift-console.apps.$cluster_name.devcluster.openshift.com"
+	   console_url="https://console-openshift-console.apps.$cluster_name.devcluster.openshift.com"
+	   open_cmd=xdg-open
 
+	   if which open &> /dev/null; then
+		  open_cmd=open
+	   fi
+
+	   if ! "$open_cmd" "$console_url"; then
+		  die "Failed to open \"$console_url\" with \"$open_cmd\""
+	   fi
+
+	   echo "Opened $console_url in your browser"
 	   echo "Username: kubeadmin"
 	   printf "Password: $(cat $auto_cluster_host_data_dir/$cluster_name/auth/kubeadmin-password)"
 
