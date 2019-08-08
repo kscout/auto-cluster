@@ -4,12 +4,12 @@ RUN apk add musl-dev git bash curl ncurses
 
 WORKDIR /tmp
 
-RUN curl 'https://mirror.openshift.com/pub/openshift-v4/clients/ocp/latest/openshift-install-linux-4.1.8.tar.gz' > openshift-install.tar.gz
+RUN curl 'https://mirror.openshift.com/pub/openshift-v4/clients/ocp/4.1.9/openshift-install-linux-4.1.9.tar.gz' > openshift-install.tar.gz
 RUN tar -xzf openshift-install.tar.gz
 RUN mv openshift-install /usr/bin/
 RUN rm openshift-install.tar.gz
 
-RUN curl 'https://mirror.openshift.com/pub/openshift-v4/clients/ocp/latest/openshift-client-linux-4.1.8.tar.gz' > oc.tar.gz
+RUN curl 'https://mirror.openshift.com/pub/openshift-v4/clients/ocp/4.1.9/openshift-client-linux-4.1.9.tar.gz' > oc.tar.gz
 RUN tar -xzf oc.tar.gz
 RUN mv oc /usr/bin/
 RUN rm oc.tar.gz
