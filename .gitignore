@@ -1,4 +1,0 @@
-.env
-*.secret*
-!values.secrets.example.yaml
-*livekubeconfig*
