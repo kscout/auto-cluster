@@ -75,7 +75,7 @@ type Config struct {
 	// Helm configures a Helm chart to be installed on new clusters
 	Helm struct {
 		// Chart is the URI of a Git repository which holds the chart to install in its root directory
-		Chart string `validate:"required"`
+		Chart string
 	}
 }
 
