@@ -19,5 +19,6 @@ The `main.go` file is the entry point.
 Run the program locally in a container:
 
 ```
-make dev
+make container
+make run
 ```
