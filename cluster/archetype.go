@@ -3,6 +3,7 @@ package cluster
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	ec2Svc "github.com/aws/aws-sdk-go/service/ec2"
@@ -14,11 +15,37 @@ type ArchetypeSpec struct {
 	//
 	// Cluster's will be given unique names based on this prefix. Clusters
 	// without this prefix will be ignored by the tool.
-	NamePrefix string `mapstructure:"namePrefix"`
+	NamePrefix string `mapstructure:"namePrefix" validate:"required"`
 
-	// HelmChart is a Git URI pointing to a Helm Chart GitHub repository which
-	// will be installed on the cluster.
-	HelmChart string `mapstructure:"helmChart"`
+	// Replicas configures the creation of multiple clusters.
+	//
+	// If multiple clusters are created the newest cluster is the "primary"
+	// cluster. Traffic will be proxied to this cluster. Other cluster replicas
+	// will be kept as backups in case the primary fails.
+	Replicas struct {
+		// Count is the number of replica clusters to create
+		Count uint `mapstructure:"count" default:"2" validate:"required"`
+
+		// Lifecycle configures the cluster ages at certain operations
+		// will be performed
+		Lifecycle struct {
+			// DeleteAfter is the oldest a cluster can be before it will be
+			// forcefully deleted
+			DeleteAfter time.Duration `mapstructure:"deleteAfter" default:"42h" validate:"required"`
+
+			// OldestPrimary is the oldest a cluster can be and still be used
+			// as a primary cluster
+			OldestPrimary time.Duration `mapstructure:"oldestPrimary" default:"12h" validate:"required"`
+		}
+	} `mapstructure:"replicas" validate:"required"`
+
+	// Install configures 1 time setup performed when a cluster is
+	// first created
+	Install struct {
+		// HelmChart is a Git URI pointing to a Helm Chart GitHub repository
+		// which will be installed on the cluster.
+		HelmChart string `mapstructure:"helmChart"`
+	} `mapstructure:"install"`
 }
 
 // ArchetypeStatus is the current state of clusters which match an ArchetypeSpec

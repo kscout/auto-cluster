@@ -25,8 +25,9 @@ Define cluster archetypes in a YAML file:
 
 ```
 archetypes:
-  - namePrefix: mykerbos
-    helmChart: https://github.com/kscout/monochart.git
+  - namePrefix: myprefix
+	install:
+      helmChart: https://github.com/kscout/monochart.git
 ```
 
 ## Configuration

@@ -1,3 +1,4 @@
 archetypes:
   - namePrefix: nhuppert-kscout
-    helmChart: https://github.com/kscout/monochart.git
+    install:
+      helmChart: https://github.com/kscout/monochart.git
