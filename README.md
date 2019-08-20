@@ -25,7 +25,7 @@ Define cluster archetypes in the `config.yaml` file:
 ```
 archetypes:
   - namePrefix: mykerbos
-	helmChart: https://github.com/kscout/monochart.git
+    helmChart: https://github.com/kscout/monochart.git
 ```
 
 # Develop
