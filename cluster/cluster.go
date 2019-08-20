@@ -7,6 +7,8 @@ import (
 // ClusterStatus defines the current status of an OpenShift cluster
 type ClusterStatus struct {
 	// Name of cluster
+	//
+	// This is considered a unique identifier.
 	Name string
 
 	// CreatedOn is the time the cluster was created

@@ -76,7 +76,16 @@ func (c Controller) Run(ctx context.Context) error {
 }
 
 // reconcile runs one iteration of the reconcile loop.
-// Attempts to make the current state equal the declared desired state.
+// It attempts to make the current state equal the declared desired state.
+//
+// This function blocks until all actions have been completed. Some actions,
+// like creating clusters, can take up to half an hour.
+//
+// For each ArchetypeSpec in the config file the following is performed:
+//
+// * Perform garbage collection on clusters based on spec.Replicas.Lifecycle
+//
+// * Ensure # clusters == spec.Replicas.Count
 func (c Controller) reconcile() error {
 	// Reconcile each archetype
 	for _, spec := range c.cfg.Archetypes {
@@ -90,7 +99,10 @@ func (c Controller) reconcile() error {
 				spec)
 		}
 
-		log.Printf("status=%#v", status)
+		// Plan
+		plan := NewArchetypePlan(spec, status)
+
+		log.Printf("plan=%s", plan)
 	}
 
 	return nil

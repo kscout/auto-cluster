@@ -24,23 +24,23 @@ type ArchetypeSpec struct {
 	// will be kept as backups in case the primary fails.
 	Replicas struct {
 		// Count is the number of replica clusters to create
+		// TODO: Figure out why this is defaulting to "0"
 		Count uint `mapstructure:"count" default:"2" validate:"required"`
 
-		// Lifecycle configures the cluster ages at certain operations
-		// will be performed
+		// Lifecycle configures cluster garbage collection rules
 		Lifecycle struct {
 			// DeleteAfter is the oldest a cluster can be before it will be
-			// forcefully deleted
+			// forcefully deleted. Inclusive range.
 			DeleteAfter time.Duration `mapstructure:"deleteAfter" default:"42h" validate:"required"`
 
 			// OldestPrimary is the oldest a cluster can be and still be used
-			// as a primary cluster
+			// as a primary cluster. Inclusive range.
 			OldestPrimary time.Duration `mapstructure:"oldestPrimary" default:"12h" validate:"required"`
 		}
 	} `mapstructure:"replicas" validate:"required"`
 
 	// Install configures 1 time setup performed when a cluster is
-	// first created
+	// first created. Changing this will only affect new clusters.
 	Install struct {
 		// HelmChart is a Git URI pointing to a Helm Chart GitHub repository
 		// which will be installed on the cluster.
