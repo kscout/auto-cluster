@@ -78,8 +78,12 @@ func (c Controller) Run(ctx context.Context) error {
 // reconcile runs one iteration of the reconcile loop.
 // Attempts to make the current state equal the declared desired state.
 func (c Controller) reconcile() error {
-	// Get archetype statuses
+	// Reconcile each archetype
 	for _, spec := range c.cfg.Archetypes {
+		log.Printf("reconciling archetype with name prefix \"%s\"",
+			spec.NamePrefix)
+
+		// Get status
 		status, err := cluster.NewArchetypeStatus(c.ec2, spec)
 		if err != nil {
 			return fmt.Errorf("failed to get archetype status for spec=%#v",
