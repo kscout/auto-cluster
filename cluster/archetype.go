@@ -2,10 +2,9 @@ package cluster
 
 import (
 	"fmt"
-	"time"
+	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
 	ec2Svc "github.com/aws/aws-sdk-go/service/ec2"
 )
 
@@ -28,24 +27,15 @@ type ArchetypeStatus struct {
 	Clusters []ClusterStatus
 }
 
-// ec2Instance holds information about AWS EC2 instances, used internally to
-// resolve clusters
-type ec2Instance struct {
-	// name of instance
-	name string
-
-	// createdOn is the time the instance was created
-	createdOn time.Time
-}
-
-// GetForSpec returns an ArchetypeStatus for a ArchetypeSpec
-func GetForSpec(ec2 *ec2Svc.EC2, spec ArchetypeSpec) (ArchetypeStatus, error) {
+// NewArchetypeStatus returns an ArchetypeStatus for a ArchetypeSpec
+func NewArchetypeStatus(ec2 *ec2Svc.EC2, spec ArchetypeSpec) (ArchetypeStatus, error) {
 	status := ArchetypeStatus{}
 
 	firstRun := true
 	nextTok := aws.String("")
-	instances := []ec2Instance{}
+	instances := []EC2Instance{}
 
+	// Get instances matching archetype
 	for firstRun || nextTok != nil {
 		if firstRun {
 			firstRun = false
@@ -75,9 +65,9 @@ func GetForSpec(ec2 *ec2Svc.EC2, spec ArchetypeSpec) (ArchetypeStatus, error) {
 					if *tag.Key == "Name" {
 						// If name matches cluster prefix
 						if strings.HasPrefix(*tag.Value, spec.NamePrefix) {
-							instances = append(instances, eC2Instance{
-								name:      *tag.Value,
-								createdOn: *instance.LaunchTime,
+							instances = append(instances, EC2Instance{
+								Name:      *tag.Value,
+								CreatedOn: *instance.LaunchTime,
 							})
 							break
 						}
@@ -87,6 +77,43 @@ func GetForSpec(ec2 *ec2Svc.EC2, spec ArchetypeSpec) (ArchetypeStatus, error) {
 		}
 
 		nextTok = resp.NextToken
+	}
+
+	// Group instances into clusters
+	// TODO: Group instances by clusters
+	// clusters keys are ClusterStatus.Name values
+	clusters := map[string]ClusterStatus{}
+
+	for _, instance := range instances {
+		// Extract cluster name from instance name
+		// Instances will have names like: "xyz25-9kjcx-master-2"
+		// Where "xyz" is the prefix. We want to extract "xyz25" as the
+		// cluster name.
+		parts := strings.Split(instance.Name, "-")
+		clusterName := ""
+
+		for i := 0; !strings.HasPrefix(clusterName, spec.NamePrefix) &&
+			i < len(parts); i++ {
+			clusterName = strings.Join(parts[:i], "-")
+		}
+
+		// Save in clusters map
+		if clusterStatus, ok := clusters[clusterName]; ok {
+			clusterStatus.Instances = append(clusterStatus.Instances,
+				instance)
+			clusters[clusterName] = clusterStatus
+		} else {
+			clusters[clusterName] = ClusterStatus{
+				Name:      clusterName,
+				CreatedOn: instance.CreatedOn,
+				Instances: []EC2Instance{instance},
+			}
+		}
+	}
+
+	// Create ArchetypeStatus to return
+	for _, clusterStatus := range clusters {
+		status.Clusters = append(status.Clusters, clusterStatus)
 	}
 
 	return status, nil
