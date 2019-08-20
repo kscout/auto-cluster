@@ -6,7 +6,7 @@ RUN adduser -D app
 USER app
 WORKDIR /home/app
 
-COPY --chown=app:app go.mod main.go /home/app
+COPY --chown=app:app go.mod go.sum main.go /home/app
 
 RUN go build
 CMD /home/app/auto-cluster

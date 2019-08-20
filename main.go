@@ -1,5 +1,5 @@
 /*
-Manages OpenShift cluster creation and configurtion.
+Manages OpenShift cluster creation and configurtion on AWS.
 */
 package main
 
