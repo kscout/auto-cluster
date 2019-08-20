@@ -4,14 +4,14 @@ Manages OpenShift cluster creation and configurtion on AWS.
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
+	"os"
+	"os/signal"
 
-	"github.com/kscout/auto-cluster/cluster"
 	"github.com/kscout/auto-cluster/config"
-
-	"github.com/aws/aws-sdk-go/aws/session"
-	ec2Svc "github.com/aws/aws-sdk-go/service/ec2"
+	"github.com/kscout/auto-cluster/controller"
 )
 
 func handleErr(err error, msg string, data ...interface{}) {
@@ -21,19 +21,35 @@ func handleErr(err error, msg string, data ...interface{}) {
 }
 
 func main() {
+	// Setup context
+	ctx, cancelCtx := context.WithCancel(context.Background())
+
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, os.Interrupt)
+
+	go func() {
+		select {
+		case <-ctx.Done():
+			return
+			break
+		case <-sigs:
+			log.Println("interrupted, shutting down gracefully...")
+			cancelCtx()
+			break
+		}
+	}()
+
 	// Get config
 	cfg, err := config.NewConfig()
 	handleErr(err, "failed to load configuration")
+	log.Printf("loaded configuration=%#v", cfg)
 
-	// Connect to AWS API
-	awsSess, err := session.NewSession(nil)
-	handleErr(err, "failed to create AWS API client")
-	ec2 := ec2Svc.New(awsSess)
+	// Run controller
+	ctrl, err := controller.NewController(cfg)
+	handleErr(err, "failed to create controller")
 
-	// Get archetype statuses
-	for _, spec := range cfg.Archetypes {
-		status, err := cluster.NewArchetypeStatus(ec2, spec)
-		handleErr(err, "failed to get archetype status for spec=%#v", spec)
-		log.Printf("status=%#v", status)
-	}
+	err = ctrl.Run(ctx)
+	handleErr(err, "failed to run controller reconcile loop")
+
+	log.Println("completed graceful shutdown")
 }
