@@ -15,11 +15,11 @@ type ArchetypeSpec struct {
 	//
 	// Cluster's will be given unique names based on this prefix. Clusters
 	// without this prefix will be ignored by the tool.
-	NamePrefix string
+	NamePrefix string `mapstructure:"namePrefix"`
 
 	// HelmChart is a Git URI pointing to a Helm Chart GitHub repository which
 	// will be installed on the cluster.
-	HelmChart string
+	HelmChart string `mapstructure:"helmChart"`
 }
 
 // ArchetypeStatus is the current state of clusters which match an ArchetypeSpec
