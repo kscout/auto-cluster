@@ -163,7 +163,7 @@ func NewArchetypeStatus(ec2 *ec2Svc.EC2, spec ArchetypeSpec) (ArchetypeStatus, e
 		}
 	}
 
-	// Create ArchetypeStatus to return
+	// Populate ArchetypeStatus to return
 	for _, clusterStatus := range clusters {
 		status.Clusters = append(status.Clusters, clusterStatus)
 	}
