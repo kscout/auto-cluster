@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"io"
 
 	"github.com/kscout/auto-cluster/cluster"
@@ -29,7 +30,19 @@ func NewConfig() (Config, error) {
 	if err := ldr.Load(&cfg); err != nil {
 		return cfg, err
 	}
-	return cfg, nil
+
+	intdCfg := Config{}
+	for _, archetype := range cfg.Archetypes {
+		pntrArch := &archetype
+		err := pntrArch.Init()
+		if err != nil {
+			return cfg, fmt.Errorf("failed to initialize archetype with "+
+				"name prefix %s: %s", archetype.NamePrefix, err.Error())
+		}
+		intdCfg.Archetypes = append(intdCfg.Archetypes, *pntrArch)
+	}
+
+	return intdCfg, nil
 }
 
 // yamlDecoder decodes YAML files into config

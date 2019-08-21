@@ -9,7 +9,9 @@ import (
 	ec2Svc "github.com/aws/aws-sdk-go/service/ec2"
 )
 
-// ArchetypeSpec defines the parameters of an OpenShift cluster
+// ArchetypeSpec defines the parameters of an OpenShift cluster.
+// Init() must be called to parse the .Replicas.Lifecycle fields into their
+// Time equivalents
 type ArchetypeSpec struct {
 	// NamePrefix is a prefix to place before a cluster's name.
 	//
@@ -23,7 +25,8 @@ type ArchetypeSpec struct {
 	// cluster. Traffic will be proxied to this cluster. Other cluster replicas
 	// will be kept as backups in case the primary fails.
 	Replicas struct {
-		// Count is the number of replica clusters to create
+		// Count is the number of replica clusters which will always
+		// be running.
 		// TODO: Figure out why this is defaulting to "0"
 		Count uint `mapstructure:"count" default:"2" validate:"required"`
 
@@ -31,11 +34,13 @@ type ArchetypeSpec struct {
 		Lifecycle struct {
 			// DeleteAfter is the oldest a cluster can be before it will be
 			// forcefully deleted. Inclusive range.
-			DeleteAfter time.Duration `mapstructure:"deleteAfter" default:"42h" validate:"required"`
+			DeleteAfter         string `mapstructure:"deleteAfter" default:"42h" validate:"required"`
+			DeleteAfterDuration time.Duration
 
 			// OldestPrimary is the oldest a cluster can be and still be used
 			// as a primary cluster. Inclusive range.
-			OldestPrimary time.Duration `mapstructure:"oldestPrimary" default:"12h" validate:"required"`
+			OldestPrimary         string `mapstructure:"oldestPrimary" default:"12h" validate:"required"`
+			OldestPrimaryDuration time.Duration
 		}
 	} `mapstructure:"replicas" validate:"required"`
 
@@ -46,6 +51,26 @@ type ArchetypeSpec struct {
 		// which will be installed on the cluster.
 		HelmChart string `mapstructure:"helmChart"`
 	} `mapstructure:"install"`
+}
+
+// Init parses the .Replicas.Lifecycle fields from their string
+// forms into their Time forms
+func (s *ArchetypeSpec) Init() error {
+	deleteAfter, err := time.ParseDuration(s.Replicas.Lifecycle.DeleteAfter)
+	if err != nil {
+		return fmt.Errorf("failed to parse deleteAfter as duration: %s",
+			err.Error())
+	}
+	s.Replicas.Lifecycle.DeleteAfterDuration = deleteAfter
+
+	oldestPrim, err := time.ParseDuration(s.Replicas.Lifecycle.OldestPrimary)
+	if err != nil {
+		return fmt.Errorf("failed to parse oldestPrimary as duration: %s",
+			err.Error())
+	}
+	s.Replicas.Lifecycle.OldestPrimaryDuration = oldestPrim
+
+	return nil
 }
 
 // ArchetypeStatus is the current state of clusters which match an ArchetypeSpec
