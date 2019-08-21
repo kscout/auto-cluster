@@ -1,4 +1,9 @@
 archetypes:
   - namePrefix: nhuppert-kscout
+    replicas:
+      count: 2
+      lifecycle:
+        deleteAfter: 42h
+        oldestPrimary: 12h
     install:
       helmChart: https://github.com/kscout/monochart.git

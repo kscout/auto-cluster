@@ -1,9 +1,9 @@
 github.com/BurntSushi/toml v0.3.1 h1:WXkYYl6Yr3qBf1K79EBnL4mak0OimBfB0XUf9Vl28OQ=
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
-github.com/Noah-Huppert/goconf v0.2.1 h1:ure/VJY+R9mwRQboWjNYx7D+MSvhbI/w4yOOwDblXSk=
-github.com/Noah-Huppert/goconf v0.2.1/go.mod h1:T1u1n1excNneAiO925EtT/mv3uuvY/V15stMZZhHK5U=
-github.com/aws/aws-sdk-go v1.23.4 h1:F6f/iQRhuSfrpUdy80q29898H0NYN27pX+95tkJ+BIY=
-github.com/aws/aws-sdk-go v1.23.4/go.mod h1:KmX6BPdI08NWTb3/sm4ZGu5ShLoqVDhKgpiN924inxo=
+github.com/Noah-Huppert/goconf v0.2.2 h1:5XmCJSZvOPwELMTI71HFrLDjii7Ta6aDv05RztBrSW0=
+github.com/Noah-Huppert/goconf v0.2.2/go.mod h1:T1u1n1excNneAiO925EtT/mv3uuvY/V15stMZZhHK5U=
+github.com/aws/aws-sdk-go v1.23.5 h1:mLCB0uWFervVN1tmXrGZfqMkdBpGgn6Umho0xCnqtUQ=
+github.com/aws/aws-sdk-go v1.23.5/go.mod h1:KmX6BPdI08NWTb3/sm4ZGu5ShLoqVDhKgpiN924inxo=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/go-playground/locales v0.12.1 h1:2FITxuFt/xuCNP1Acdhv62OzaCiviiE4kotfhkmOqEc=
 github.com/go-playground/locales v0.12.1/go.mod h1:IUMDtCfWo/w/mtMfIE/IG2K+Ey3ygWanZIBtBW0W2TM=

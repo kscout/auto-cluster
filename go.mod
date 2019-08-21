@@ -3,7 +3,7 @@ module github.com/kscout/auto-cluster
 go 1.12
 
 require (
-	github.com/Noah-Huppert/goconf v0.2.1
-	github.com/aws/aws-sdk-go v1.23.4
+	github.com/Noah-Huppert/goconf v0.2.2
+	github.com/aws/aws-sdk-go v1.23.5
 	gopkg.in/yaml.v2 v2.2.2
 )

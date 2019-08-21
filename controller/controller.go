@@ -95,14 +95,21 @@ func (c Controller) reconcile() error {
 		// Get status
 		status, err := cluster.NewArchetypeStatus(c.ec2, spec)
 		if err != nil {
-			return fmt.Errorf("failed to get archetype status for spec=%#v",
-				spec)
+			return fmt.Errorf("failed to get archetype status for spec=%#v: %s",
+				spec, err.Error())
 		}
 
 		// Plan
 		plan := NewArchetypePlan(spec, status)
 
 		log.Printf("plan=%s", plan)
+
+		// Execute plan
+		executor := NewExecutor(plan)
+		err = executor.Execute()
+		if err != nil {
+			return fmt.Errorf("failed to execute plan: %s", err.Error())
+		}
 	}
 
 	return nil
