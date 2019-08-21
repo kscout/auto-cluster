@@ -12,6 +12,9 @@ import (
 // ArchetypePlan describes the intent to take actions to resolve a cluster
 // archetype's status.
 type ArchetypePlan struct {
+	// Spec is the cluster archetype spec
+	Spec cluster.ArchetypeSpec
+
 	// DeleteClusters are the clusters to delete
 	DeleteClusters []cluster.ClusterStatus
 
@@ -38,6 +41,7 @@ func NewArchetypePlan(spec cluster.ArchetypeSpec,
 	status cluster.ArchetypeStatus) ArchetypePlan {
 
 	plan := ArchetypePlan{
+		Spec:           spec,
 		DeleteClusters: []cluster.ClusterStatus{},
 	}
 
@@ -57,7 +61,7 @@ func NewArchetypePlan(spec cluster.ArchetypeSpec,
 	// Garbage collect old clusters
 	for _, cluster := range status.Clusters {
 		// Check if older than spec.Lifecycle.DeleteAfter
-		if time.Since(cluster.CreatedOn) >= spec.Replicas.Lifecycle.DeleteAfter {
+		if time.Since(cluster.CreatedOn) >= spec.Replicas.Lifecycle.DeleteAfterDuration {
 			plan.DeleteClusters = append(plan.DeleteClusters, cluster)
 
 			// If this is the primary cluster, unset var
@@ -69,7 +73,7 @@ func NewArchetypePlan(spec cluster.ArchetypeSpec,
 
 	// Make a new primary if the current primary is too old
 	if primCluster != nil {
-		if time.Since(primCluster.CreatedOn) >= spec.Replicas.Lifecycle.OldestPrimary {
+		if time.Since(primCluster.CreatedOn) >= spec.Replicas.Lifecycle.OldestPrimaryDuration {
 			primCluster = nil
 			plan.CreateClusters++
 		}
