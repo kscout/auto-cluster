@@ -1,5 +1,5 @@
 archetypes:
-  - namePrefix: nhuppert-kscout
+  - namePrefix: nhuppert-kscout-beta
     replicas:
       count: 2
       lifecycle:
@@ -7,3 +7,5 @@ archetypes:
         oldestPrimary: 12h
     install:
       helmChart: https://github.com/kscout/monochart.git
+stateDir: /home/noah/documents/work/red-hat/auto-cluster/.auto-cluster-state
+pullSecretPath: ./pull-secret

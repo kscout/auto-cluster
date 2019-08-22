@@ -138,15 +138,24 @@ func NewArchetypeStatus(ec2 *ec2Svc.EC2, spec ArchetypeSpec) (ArchetypeStatus, e
 
 	for _, instance := range instances {
 		// Extract cluster name from instance name
-		// Instances will have names like: "xyz25-9kjcx-master-2"
-		// Where "xyz" is the prefix. We want to extract "xyz25" as the
-		// cluster name.
+		// Instances will have names like: "xyz-xxxx-gh3k-master-2"
+		// Where "xyz" is the name prefix and "xxxx" is the random part of the
+		// name. We want to extract "xyz-xxxx" as cluster name.
 		parts := strings.Split(instance.Name, "-")
 		clusterName := ""
 
-		for i := 0; !strings.HasPrefix(clusterName, spec.NamePrefix) &&
-			i < len(parts); i++ {
+		// Add 1 element of parts onto clusterName each iteration.
+		// Continue adding iterating clusterName contains the
+		// spec's NamePrefix.
+		for i := 0; i < len(parts); i++ {
 			clusterName = strings.Join(parts[:i], "-")
+
+			// If addition of new part element makes item have prefix, add 1
+			// more part so the name has the random component
+			if strings.HasPrefix(clusterName, spec.NamePrefix) {
+				clusterName += "-" + parts[i+1]
+				break
+			}
 		}
 
 		// Save in clusters map
@@ -169,4 +178,14 @@ func NewArchetypeStatus(ec2 *ec2Svc.EC2, spec ArchetypeSpec) (ArchetypeStatus, e
 	}
 
 	return status, nil
+}
+
+// String returns a string representation of an archetype status
+func (s ArchetypeStatus) String() string {
+	strs := []string{}
+	for _, cluster := range s.Clusters {
+		strs = append(strs, fmt.Sprintf("%s", cluster))
+	}
+
+	return fmt.Sprintf("ArchetypeStatus{Clusters=[%s]}", strings.Join(strs, ", "))
 }
