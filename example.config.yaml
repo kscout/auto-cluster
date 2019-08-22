@@ -1,3 +1,4 @@
+# Parameters of clusters to create
 archetypes:
   - namePrefix: nhuppert-kscout-beta
     replicas:
@@ -7,5 +8,9 @@ archetypes:
         oldestPrimary: 12h
     install:
       helmChart: https://github.com/kscout/monochart.git
+      
+# Directory to store custom state
 stateDir: /home/noah/documents/work/red-hat/auto-cluster/.auto-cluster-state
+
+# Path to file containing Red Hat container registry pull secret
 pullSecretPath: ./pull-secret

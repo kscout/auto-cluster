@@ -31,11 +31,15 @@ archetypes:
 ```
 
 ## Configuration
-The tool accepts YAML configuration files in the processes working directory or 
-in `/etc/auto-cluster`. Defined by the [`config.Config` struct](https://godoc.org/github.com/kscout/auto-cluster/config#Config).
+The tool accepts YAML configuration files in the processes working 
+directory or in `/etc/auto-cluster`. Defined by the 
+[`config.Config` struct](https://godoc.org/github.com/kscout/auto-cluster/config#Config).
 
-The tool must also be given AWS credentials. Do this via the normal methods 
-(ie., `AWS_` environment variables and / or `~/.aws/credentials`file).
+See the [example config file `example.config.yaml](example.config.yaml)
+
+The tool must also be given AWS credentials. Do this via the 
+normal methods (ie., `AWS_` environment variables and / or 
+`~/.aws/credentials`file).
 
 # Develop
 Auto Cluster tool development instructions.
