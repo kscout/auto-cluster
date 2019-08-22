@@ -2,7 +2,6 @@ package controller
 
 import (
 	"fmt"
-	"log"
 	"sort"
 	"time"
 
@@ -82,7 +81,6 @@ func NewArchetypePlan(spec cluster.ArchetypeSpec,
 	// Create / delete more clusters to match spec.Replicas.Count
 	afterPlanCount := uint(len(status.Clusters)) + plan.CreateClusters -
 		uint(len(plan.DeleteClusters))
-	log.Printf("afterPlanCount=%d, spec.Replicas.Count=%d", afterPlanCount, spec.Replicas.Count)
 	if afterPlanCount > spec.Replicas.Count { // Delete oldest clusters
 		delCount := afterPlanCount - spec.Replicas.Count
 
