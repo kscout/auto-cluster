@@ -5,6 +5,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -42,10 +43,16 @@ func main() {
 	// Get config
 	cfg, err := config.NewConfig()
 	handleErr(err, "failed to load configuration")
-	log.Printf("loaded configuration=%#v", cfg)
+	log.Printf("loaded configuration=%s", cfg)
+
+	// Command line flags
+	var dryRun bool
+	flag.BoolVar(&dryRun, "dry-run", false, "do not run "+
+		"execute stage")
+	flag.Parse()
 
 	// Run controller
-	ctrl, err := controller.NewController(cfg)
+	ctrl, err := controller.NewController(cfg, dryRun)
 	handleErr(err, "failed to create controller")
 
 	err = ctrl.Run(ctx)
